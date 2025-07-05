@@ -166,6 +166,15 @@ defmodule FinancialAdvisorAi.Integrations.HubspotService do
     end
   end
 
+  @doc """
+  Polls for new Hubspot contact or note events for the given user_id.
+  Returns a list of new event objects (raw data).
+  """
+  def poll_new_events(user_id) do
+    # TODO: Track last seen event, fetch new ones, return as events
+    {:ok, []}
+  end
+
   defp get_hubspot_integration(user_id) do
     case AI.get_integration(user_id, "hubspot") do
       nil -> {:error, :not_connected}

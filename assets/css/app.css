@@ -100,3 +100,38 @@
 [data-phx-session] { display: contents }
 
 /* This file is for your main application CSS */
+
+/* --- Custom Layout for Sidebar and Chat Area --- */
+.app-container {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.sidebar {
+  width: 280px;
+  min-width: 220px;
+  max-width: 340px;
+  height: 100vh;
+  background: #f8fafc;
+  border-right: 1px solid #e5e7eb;
+  overflow-y: auto;
+  position: relative;
+  z-index: 1;
+}
+
+.chat-area {
+  flex: 1;
+  height: 100vh;
+  overflow-y: auto;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* --- End Custom Layout --- */

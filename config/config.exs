@@ -75,7 +75,7 @@ config :ueberauth, Ueberauth,
       {Ueberauth.Strategy.Google,
        [
          default_scope:
-           "email profile https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/calendar"
+           "email profile https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/calendar.events.owned"
        ]}
   ]
 

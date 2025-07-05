@@ -3,7 +3,7 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
 
   alias FinancialAdvisorAi.AI
   alias FinancialAdvisorAi.AI.{Conversation, Message}
-  alias FinancialAdvisorAi.AI.RagService
+  alias FinancialAdvisorAi.AI.{RagService, LlmService}
 
   @impl true
   def mount(_params, _session, socket) do
@@ -67,8 +67,12 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
     # Use RAG to search for relevant context
     context = RagService.search_by_question_type(user_id, content)
 
-    # Generate AI response based on the question and context
-    ai_response = generate_ai_response(content, context)
+    # Generate AI response using LLM service
+    ai_response =
+      case LlmService.generate_response(content, context) do
+        {:ok, response} -> response
+        {:error, _reason} -> generate_fallback_response(content, context)
+      end
 
     {:ok, ai_message} =
       AI.create_message(%{
@@ -97,18 +101,18 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
     {:noreply, stream_insert(socket, :messages, message)}
   end
 
-  # Generate AI response based on user question and RAG context
-  defp generate_ai_response(question, context) do
+  # Fallback response when LLM service is unavailable
+  defp generate_fallback_response(question, context) do
     cond do
       # Handle specific question types
       String.contains?(String.downcase(question), ["kid", "child", "baseball", "soccer"]) ->
-        handle_family_question(question, context)
+        handle_family_question(context)
 
       String.contains?(String.downcase(question), ["stock", "aapl", "investment"]) ->
-        handle_stock_question(question, context)
+        handle_stock_question(context)
 
       String.contains?(String.downcase(question), ["meeting", "appointment", "schedule"]) ->
-        handle_meeting_question(question, context)
+        handle_meeting_question(context)
 
       # General questions
       true ->
@@ -116,7 +120,7 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
     end
   end
 
-  defp handle_family_question(question, context) do
+  defp handle_family_question(context) do
     case context.emails do
       [] ->
         "I didn't find any emails mentioning family activities like baseball or kids' sports. Would you like me to search for different keywords?"
@@ -133,7 +137,7 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
     end
   end
 
-  defp handle_stock_question(question, context) do
+  defp handle_stock_question(context) do
     case context.emails do
       [] ->
         "I didn't find any emails discussing stocks or investments. Would you like me to search with different terms?"
@@ -150,7 +154,7 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
     end
   end
 
-  defp handle_meeting_question(question, context) do
+  defp handle_meeting_question(context) do
     case context.emails do
       [] ->
         "I didn't find any emails about meetings or appointments. Would you like me to check your calendar or search with different terms?"

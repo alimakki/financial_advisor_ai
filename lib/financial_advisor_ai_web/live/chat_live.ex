@@ -67,11 +67,20 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
     # Use RAG to search for relevant context
     context = RagService.search_by_question_type(user_id, content)
 
-    # Generate AI response using LLM service
+    # Check if this is an action request and use tool calling if appropriate
     ai_response =
-      case LlmService.generate_response(content, context) do
-        {:ok, response} -> response
-        {:error, _reason} -> generate_fallback_response(content, context)
+      cond do
+        contains_action_keywords?(content) ->
+          case LlmService.generate_response_with_tools(content, context, user_id) do
+            {:ok, response} -> response
+            {:error, _reason} -> generate_fallback_response(content, context)
+          end
+
+        true ->
+          case LlmService.generate_response(content, context) do
+            {:ok, response} -> response
+            {:error, _reason} -> generate_fallback_response(content, context)
+          end
       end
 
     {:ok, ai_message} =
@@ -99,6 +108,25 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
   @impl true
   def handle_info({:new_message, message}, socket) do
     {:noreply, stream_insert(socket, :messages, message)}
+  end
+
+  # Check if the user message contains action keywords that would benefit from tool calling
+  defp contains_action_keywords?(content) do
+    action_keywords = [
+      "schedule",
+      "send email",
+      "create contact",
+      "add contact",
+      "send a message",
+      "book appointment",
+      "set up meeting",
+      "create task",
+      "remind me",
+      "follow up"
+    ]
+
+    content_lower = String.downcase(content)
+    Enum.any?(action_keywords, &String.contains?(content_lower, &1))
   end
 
   # Fallback response when LLM service is unavailable
@@ -319,7 +347,7 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
               </button>
             </.form>
             <p class="text-xs text-gray-500 mt-2">
-              Connected to Gmail, Calendar, and HubSpot • AI Agent is ready
+              Connected to Gmail, Calendar, and HubSpot • AI Agent with Tool Calling Ready
             </p>
           </div>
         </div>

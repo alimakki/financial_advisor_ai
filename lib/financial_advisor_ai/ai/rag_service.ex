@@ -84,7 +84,7 @@ defmodule FinancialAdvisorAi.AI.RagService do
       [e],
       fragment("? LIKE ? OR ? LIKE ?", e.content, ^"%#{query}%", e.subject, ^"%#{query}%")
     )
-    |> or_where([e], fragment("? LIKE ANY(?)", e.content, ^Enum.map(query_terms, &"%#{&1}%")))
+    |> where([e], fragment("? LIKE ?", e.content, ^"%#{Enum.join(query_terms, "%")}%"))
     |> order_by([e], desc: e.inserted_at)
     |> limit(10)
     |> Repo.all()
@@ -125,7 +125,20 @@ defmodule FinancialAdvisorAi.AI.RagService do
     results =
       EmailEmbedding
       |> where([e], e.user_id == ^user_id)
-      |> where([e], fragment("? LIKE ANY(?)", e.content, ^Enum.map(family_keywords, &"%#{&1}%")))
+      |> where(
+        [e],
+        fragment(
+          "? LIKE ? OR ? LIKE ? OR ? LIKE ? OR ? LIKE ?",
+          e.content,
+          ^"%kid%",
+          e.content,
+          ^"%child%",
+          e.content,
+          ^"%baseball%",
+          e.content,
+          ^"%family%"
+        )
+      )
       |> order_by([e], desc: e.inserted_at)
       |> limit(15)
       |> Repo.all()
@@ -173,7 +186,18 @@ defmodule FinancialAdvisorAi.AI.RagService do
     results =
       EmailEmbedding
       |> where([e], e.user_id == ^user_id)
-      |> where([e], fragment("? LIKE ANY(?)", e.content, ^Enum.map(meeting_keywords, &"%#{&1}%")))
+      |> where(
+        [e],
+        fragment(
+          "? LIKE ? OR ? LIKE ? OR ? LIKE ?",
+          e.content,
+          ^"%meeting%",
+          e.content,
+          ^"%appointment%",
+          e.content,
+          ^"%schedule%"
+        )
+      )
       |> order_by([e], desc: e.inserted_at)
       |> limit(10)
       |> Repo.all()

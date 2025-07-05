@@ -5,6 +5,7 @@ defmodule FinancialAdvisorAi.AI.LlmService do
   """
 
   require Logger
+  alias FinancialAdvisorAi.Integrations.CalendarService
 
   @openai_api_url "https://api.openai.com/v1"
   @default_model "gpt-4o-mini"
@@ -394,21 +395,48 @@ defmodule FinancialAdvisorAi.AI.LlmService do
   end
 
   defp execute_tool("schedule_meeting", params, user_id) do
-    # Create a task for scheduling the meeting
-    task_params = %{
-      user_id: user_id,
-      title: "Schedule meeting: #{Map.get(params, "subject")}",
-      description: "Schedule meeting with #{Map.get(params, "client_email")}",
-      task_type: "calendar",
-      parameters: params
-    }
+    client_email = Map.get(params, "client_email")
+    subject = Map.get(params, "subject")
+    duration_minutes = Map.get(params, "duration_minutes", 60)
 
-    case FinancialAdvisorAi.AI.create_task(task_params) do
-      {:ok, task} ->
-        {:ok, %{tool: "schedule_meeting", task_id: task.id, status: "task_created"}}
+    # Use Calendar service to actually schedule the meeting
+    case CalendarService.schedule_meeting_with_client(
+           user_id,
+           client_email,
+           subject,
+           duration_minutes
+         ) do
+      {:ok, event} ->
+        {:ok,
+         %{
+           tool: "schedule_meeting",
+           event_id: event.id,
+           status: "scheduled",
+           start_time: event.start_time,
+           end_time: event.end_time,
+           attendees: event.attendees
+         }}
+
+      {:error, :not_connected} ->
+        # Create a task for manual scheduling
+        task_params = %{
+          user_id: user_id,
+          title: "Schedule meeting: #{subject}",
+          description: "Schedule meeting with #{client_email}",
+          task_type: "calendar",
+          parameters: params
+        }
+
+        case FinancialAdvisorAi.AI.create_task(task_params) do
+          {:ok, task} ->
+            {:ok, %{tool: "schedule_meeting", task_id: task.id, status: "task_created"}}
+
+          {:error, reason} ->
+            {:error, "Failed to create scheduling task: #{inspect(reason)}"}
+        end
 
       {:error, reason} ->
-        {:error, "Failed to create scheduling task: #{inspect(reason)}"}
+        {:error, "Failed to schedule meeting: #{inspect(reason)}"}
     end
   end
 
@@ -491,7 +519,13 @@ defmodule FinancialAdvisorAi.AI.LlmService do
                 end
 
               "schedule_meeting" ->
-                "✅ Created scheduling task (ID: #{result.task_id}). I'll work on coordinating the meeting."
+                case result.status do
+                  "scheduled" ->
+                    "✅ Meeting scheduled successfully! Event ID: #{result.event_id}\nTime: #{result.start_time} - #{result.end_time}"
+
+                  "task_created" ->
+                    "✅ Created scheduling task (ID: #{result.task_id}). I'll work on coordinating the meeting."
+                end
 
               "send_email" ->
                 "✅ Created email task (ID: #{result.task_id}). I'll send the email for you."

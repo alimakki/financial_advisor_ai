@@ -78,7 +78,7 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
         contains_action_keywords?(content) ->
           case LlmService.generate_response_with_tools(content, context, user_id) do
             {:ok, response} -> response
-            {:error, _reason} -> generate_fallback_response(content, context)
+            _error -> generate_fallback_response(content, context)
           end
 
         true ->

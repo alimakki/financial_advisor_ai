@@ -32,7 +32,8 @@ defmodule FinancialAdvisorAi.MixProject do
   #
   # Type `mix help deps` for examples and options.
   defp deps do
-    {:bandit, "~> 1.5"},
+    [
+      {:bandit, "~> 1.5"},
       # OAuth and integrations
       {:ueberauth, "~> 0.10"},
       {:ueberauth_google, "~> 0.12"},
@@ -43,9 +44,7 @@ defmodule FinancialAdvisorAi.MixProject do
       {:tesla, "~> 1.8"},
       {:hackney, "~> 1.20"},
       # JSON handling
-      {:poison, "~> 5.0"}
-
-    [
+      {:poison, "~> 5.0"},
       {:phoenix, "~> 1.8.0-rc.3", override: true},
       {:phoenix_ecto, "~> 4.5"},
       {:ecto_sql, "~> 3.10"},
@@ -69,19 +68,7 @@ defmodule FinancialAdvisorAi.MixProject do
       {:telemetry_metrics, "~> 1.0"},
       {:telemetry_poller, "~> 1.0"},
       {:jason, "~> 1.2"},
-      {:dns_cluster, "~> 0.1.1"},
-      {:bandit, "~> 1.5"},
-      # OAuth and integrations
-      {:ueberauth, "~> 0.10"},
-      {:ueberauth_google, "~> 0.12"},
-      # Vector embeddings and AI
-      {:nx, "~> 0.7"},
-      {:bumblebee, "~> 0.5"},
-      # HTTP clients
-      {:tesla, "~> 1.8"},
-      {:hackney, "~> 1.20"},
-      # JSON handling
-      {:poison, "~> 5.0"}
+      {:dns_cluster, "~> 0.1.1"}
     ]
   end
 

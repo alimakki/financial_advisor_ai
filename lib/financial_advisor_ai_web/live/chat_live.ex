@@ -2,7 +2,6 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
   use FinancialAdvisorAiWeb, :live_view
 
   alias FinancialAdvisorAi.AI
-  alias FinancialAdvisorAi.AI.{Conversation, Message}
   alias FinancialAdvisorAi.AI.{RagService, LlmService}
 
   @impl true
@@ -35,12 +34,18 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
 
     messages = AI.list_messages(active_conversation.id)
 
+    # Check integration status
+    google_integration = AI.get_integration(user_id, "google")
+    hubspot_integration = AI.get_integration(user_id, "hubspot")
+
     {:ok,
      socket
      |> assign(:conversations, conversations)
      |> assign(:active_conversation, active_conversation)
      |> assign(:messages, messages)
      |> assign(:message_form, to_form(%{"content" => ""}))
+     |> assign(:google_connected, !is_nil(google_integration))
+     |> assign(:hubspot_connected, !is_nil(hubspot_integration))
      |> stream(:messages, messages)}
   end
 
@@ -254,20 +259,37 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
     <!-- Integration Status -->
           <div class="p-4 border-t border-gray-200">
             <h4 class="text-sm font-medium text-gray-700 mb-3">Connected Services</h4>
-            <div class="space-y-2">
+            <div class="space-y-3">
               <div class="flex items-center justify-between text-sm">
-                <span class="text-gray-600">Gmail</span>
-                <span class="text-green-600 text-xs">Connected</span>
+                <span class="text-gray-600">Gmail & Calendar</span>
+                <%= if @google_connected do %>
+                  <span class="text-green-600 text-xs">✓ Connected</span>
+                <% else %>
+                  <a href="/auth/google" class="text-blue-600 hover:text-blue-700 text-xs underline">
+                    Connect
+                  </a>
+                <% end %>
               </div>
               <div class="flex items-center justify-between text-sm">
-                <span class="text-gray-600">Calendar</span>
-                <span class="text-green-600 text-xs">Connected</span>
-              </div>
-              <div class="flex items-center justify-between text-sm">
-                <span class="text-gray-600">HubSpot</span>
-                <span class="text-gray-600 text-xs">Not Connected</span>
+                <span class="text-gray-600">HubSpot CRM</span>
+                <%= if @hubspot_connected do %>
+                  <span class="text-green-600 text-xs">✓ Connected</span>
+                <% else %>
+                  <a href="/auth/hubspot" class="text-blue-600 hover:text-blue-700 text-xs underline">
+                    Connect
+                  </a>
+                <% end %>
               </div>
             </div>
+
+            <%= unless @google_connected or @hubspot_connected do %>
+              <div class="mt-4 p-3 bg-blue-50 rounded-lg">
+                <p class="text-xs text-blue-700 font-medium mb-2">Get Started</p>
+                <p class="text-xs text-blue-600">
+                  Connect your accounts to unlock the full power of your AI assistant!
+                </p>
+              </div>
+            <% end %>
           </div>
         </div>
         
@@ -347,7 +369,11 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
               </button>
             </.form>
             <p class="text-xs text-gray-500 mt-2">
-              Connected to Gmail, Calendar, and HubSpot • AI Agent with Tool Calling Ready
+              <%= if @google_connected and @hubspot_connected do %>
+                ✓ Connected to Gmail, Calendar, and HubSpot • AI Agent Ready
+              <% else %>
+                Connect your accounts above to unlock full AI capabilities
+              <% end %>
             </p>
           </div>
         </div>

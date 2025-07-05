@@ -1,34 +1,6 @@
 defmodule FinancialAdvisorAiWeb.OauthController do
   use FinancialAdvisorAiWeb, :controller
 
-  alias FinancialAdvisorAi.{AI, Accounts}
-  alias FinancialAdvisorAi.Accounts.User
-
-  @doc """
-  Initiates OAuth flow for Google (Gmail + Calendar)
-  """
-  def google(conn, _params) do
-    redirect(conn, external: Ueberauth.Strategy.Google.OAuth.authorize_url!([
-      scope: "email profile https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/calendar",
-      access_type: "offline",
-      prompt: "consent"
-    ]))
-  end
-
-  @doc """
-  Handles Google OAuth callback
-  """
-  def google_callback(conn, %{"code" => code}) do
-    user = conn.assigns.current_scope.user
-
-    case exchange_google_code_for_tokens(code) do
-      {:ok, tokens} ->
-        # Store Google integration
-        integration_attrs = %{
-          user_id: user.id,
-   defmodule FinancialAdvisorAiWeb.OauthController do
-  use FinancialAdvisorAiWeb, :controller
-
   alias FinancialAdvisorAi.AI
   alias FinancialAdvisorAi.Accounts.User
 
@@ -62,7 +34,10 @@ defmodule FinancialAdvisorAiWeb.OauthController do
         case AI.upsert_integration(integration_attrs) do
           {:ok, _integration} ->
             conn
-            |> put_flash(:info, "Successfully connected to Google! Gmail and Calendar access enabled.")
+            |> put_flash(
+              :info,
+              "Successfully connected to Google! Gmail and Calendar access enabled."
+            )
             |> redirect(to: ~p"/")
 
           {:error, _changeset} ->
@@ -106,7 +81,7 @@ defmodule FinancialAdvisorAiWeb.OauthController do
           refresh_token: tokens["refresh_token"],
           expires_at: calculate_expires_at(tokens["expires_in"]),
           scope: tokens["scope"],
-          
+          metadata: %{
             hub_domain: tokens["hub_domain"],
             hub_id: tokens["hub_id"]
           }

@@ -162,11 +162,12 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
         family_mentions =
           emails
           |> Enum.map(fn email ->
-            "• #{email.sender}: #{email.content_preview}"
+            preview = String.slice(email.content_preview, 0, 120)
+            "📧 **#{email.sender}**\n   Subject: #{email.subject}\n   Preview: #{preview}..."
           end)
-          |> Enum.join("\n")
+          |> Enum.join("\n\n")
 
-        "I found #{length(emails)} emails mentioning family activities:\n\n#{family_mentions}\n\nWould you like me to provide more details about any of these conversations?"
+        "I found #{length(emails)} emails mentioning family activities:\n\n#{family_mentions}\n\nWould you like me to help you respond to any of these or schedule something related to these conversations?"
     end
   end
 

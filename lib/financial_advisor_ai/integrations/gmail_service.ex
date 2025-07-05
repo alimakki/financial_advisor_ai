@@ -1,0 +1,193 @@
+defmodule FinancialAdvisorAi.Integrations.GmailService do
+  @moduledoc """
+  Gmail integration service for reading and sending emails.
+  """
+
+  alias FinancialAdvisorAi.AI
+  alias FinancialAdvisorAi.AI.Integration
+
+  @gmail_base_url "https://gmail.googleapis.com/gmail/v1"
+
+  def list_messages(user_id, opts \\ []) do
+    with {:ok, integration} <- get_gmail_integration(user_id),
+         {:ok, response} <- make_gmail_request(integration, "/users/me/messages", opts) do
+      {:ok, response["messages"] || []}
+    else
+      error -> error
+    end
+  end
+
+  def get_message(user_id, message_id) do
+    with {:ok, integration} <- get_gmail_integration(user_id),
+         {:ok, response} <- make_gmail_request(integration, "/users/me/messages/#{message_id}") do
+      {:ok, parse_message(response)}
+    else
+      error -> error
+    end
+  end
+
+  def send_email(user_id, to, subject, body) do
+    with {:ok, integration} <- get_gmail_integration(user_id),
+         {:ok, raw_email} <- create_raw_email(to, subject, body),
+         {:ok, response} <-
+           make_gmail_request(integration, "/users/me/messages/send", %{raw: raw_email}, :post) do
+      {:ok, response}
+    else
+      error -> error
+    end
+  end
+
+  def create_contact_from_email(user_id, email_data) do
+    # Extract sender information and create embeddings for RAG
+    sender = extract_sender(email_data)
+    content = extract_content(email_data)
+
+    # Store email embedding for RAG
+    AI.create_email_embedding(%{
+      user_id: user_id,
+      email_id: email_data["id"],
+      subject: email_data["subject"],
+      content: content,
+      sender: sender,
+      recipient: extract_recipient(email_data),
+      metadata: %{
+        thread_id: email_data["threadId"],
+        labels: email_data["labelIds"] || []
+      }
+    })
+  end
+
+  def search_emails(user_id, query) do
+    with {:ok, integration} <- get_gmail_integration(user_id),
+         {:ok, response} <- make_gmail_request(integration, "/users/me/messages", %{q: query}) do
+      messages = response["messages"] || []
+
+      detailed_messages =
+        Enum.map(messages, fn msg ->
+          case get_message(user_id, msg["id"]) do
+            {:ok, detailed} -> detailed
+            _ -> nil
+          end
+        end)
+        |> Enum.reject(&is_nil/1)
+
+      {:ok, detailed_messages}
+    else
+      error -> error
+    end
+  end
+
+  defp get_gmail_integration(user_id) do
+    case AI.get_integration(user_id, "google") do
+      nil -> {:error, :not_connected}
+      integration -> {:ok, integration}
+    end
+  end
+
+  defp make_gmail_request(integration, path, params \\ %{}, method \\ :get) do
+    url = @gmail_base_url <> path
+
+    headers = [
+      {"Authorization", "Bearer #{integration.access_token}"},
+      {"Content-Type", "application/json"}
+    ]
+
+    case method do
+      :get ->
+        query_string = URI.encode_query(params)
+        full_url = if query_string != "", do: "#{url}?#{query_string}", else: url
+        Req.get(full_url, headers: headers)
+
+      :post ->
+        Req.post(url, headers: headers, json: params)
+    end
+    |> handle_response()
+  end
+
+  defp handle_response({:ok, %{status: status, body: body}}) when status in 200..299 do
+    {:ok, body}
+  end
+
+  defp handle_response({:ok, %{status: status, body: body}}) do
+    {:error, {status, body}}
+  end
+
+  defp handle_response({:error, error}) do
+    {:error, error}
+  end
+
+  defp parse_message(response) do
+    payload = response["payload"] || %{}
+    headers = payload["headers"] || []
+
+    %{
+      id: response["id"],
+      thread_id: response["threadId"],
+      subject: get_header(headers, "Subject"),
+      from: get_header(headers, "From"),
+      to: get_header(headers, "To"),
+      date: get_header(headers, "Date"),
+      body: extract_body(payload),
+      labels: response["labelIds"] || []
+    }
+  end
+
+  defp get_header(headers, name) do
+    case Enum.find(headers, fn h -> h["name"] == name end) do
+      %{"value" => value} -> value
+      _ -> nil
+    end
+  end
+
+  defp extract_body(payload) do
+    cond do
+      payload["body"]["data"] -> Base.decode64!(payload["body"]["data"])
+      payload["parts"] -> extract_body_from_parts(payload["parts"])
+      true -> ""
+    end
+  end
+
+  defp extract_body_from_parts(parts) do
+    Enum.find_value(parts, "", fn part ->
+      if part["mimeType"] == "text/plain" and part["body"]["data"] do
+        Base.decode64!(part["body"]["data"])
+      end
+    end)
+  end
+
+  defp create_raw_email(to, subject, body) do
+    email = """
+    To: #{to}
+    Subject: #{subject}
+    Content-Type: text/plain; charset=UTF-8
+
+    #{body}
+    """
+
+    {:ok, Base.encode64(email)}
+  end
+
+  defp extract_sender(email_data) do
+    email_data["from"] ||
+      email_data["payload"]["headers"]
+      |> Enum.find(fn h -> h["name"] == "From" end)
+      |> case do
+        %{"value" => value} -> value
+        _ -> "unknown"
+      end
+  end
+
+  defp extract_content(email_data) do
+    email_data["body"] || extract_body(email_data["payload"] || %{})
+  end
+
+  defp extract_recipient(email_data) do
+    email_data["to"] ||
+      email_data["payload"]["headers"]
+      |> Enum.find(fn h -> h["name"] == "To" end)
+      |> case do
+        %{"value" => value} -> value
+        _ -> "unknown"
+      end
+  end
+end

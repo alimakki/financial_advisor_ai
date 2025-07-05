@@ -79,10 +79,6 @@ config :ueberauth, Ueberauth,
        ]}
   ]
 
-config :ueberauth, Ueberauth.Strategy.Google.OAuth,
-  client_id: System.get_env("GOOGLE_CLIENT_ID"),
-  client_secret: System.get_env("GOOGLE_CLIENT_SECRET")
-
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 

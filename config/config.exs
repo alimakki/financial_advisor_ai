@@ -73,11 +73,12 @@ config :logger, :default_formatter,
 # Configure Ueberauth for OAuth
 config :ueberauth, Ueberauth,
   providers: [
-    google: {Ueberauth.Strategy.Google,
-      [
-        default_scope:
-          "email profile https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/calendar"
-      ]}
+    google:
+      {Ueberauth.Strategy.Google,
+       [
+         default_scope:
+           "email profile https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/calendar"
+       ]}
   ]
 
 config :ueberauth, Ueberauth.Strategy.Google.OAuth,

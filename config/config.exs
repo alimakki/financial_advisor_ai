@@ -7,6 +7,19 @@
 # General application configuration
 import Config
 
+config :financial_advisor_ai, :scopes,
+  user: [
+    default: true,
+    module: FinancialAdvisorAi.Accounts.Scope,
+    assign_key: :current_scope,
+    access_path: [:user, :id],
+    schema_key: :user_id,
+    schema_type: :id,
+    schema_table: :users,
+    test_data_fixture: FinancialAdvisorAi.AccountsFixtures,
+    test_login_helper: :register_and_log_in_user
+  ]
+
 config :financial_advisor_ai,
   ecto_repos: [FinancialAdvisorAi.Repo],
   generators: [timestamp_type: :utc_datetime]
@@ -57,6 +70,18 @@ config :logger, :default_formatter,
   format: "$time $metadata[$level] $message\n",
   metadata: [:request_id]
 
+\
+# Configure Ueberauth for OAuth\
+config :ueberauth, Ueberauth,\
+  providers: [\
+    google: {Ueberauth.Strategy.Google, [\
+      default_scope: "email profile https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/calendar"\
+    ]}\
+  ]\
+\
+config :ueberauth, Ueberauth.Strategy.Google.OAuth,\
+  client_id: System.get_env("GOOGLE_CLIENT_ID"),\
+  client_secret: System.get_env("GOOGLE_CLIENT_SECRET")
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 

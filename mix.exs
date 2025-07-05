@@ -32,6 +32,8 @@ defmodule FinancialAdvisorAi.MixProject do
   #
   # Type `mix help deps` for examples and options.
   defp deps do
+    {:bandit, "~> 1.5"}
+
     [
       {:phoenix, "~> 1.8.0-rc.3", override: true},
       {:phoenix_ecto, "~> 4.5"},

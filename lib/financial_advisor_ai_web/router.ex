@@ -53,6 +53,12 @@ defmodule FinancialAdvisorAiWeb.Router do
       live "/users/settings", UserLive.Settings, :edit
       live "/", ChatLive, :index
       live "/users/settings/confirm-email/:token", UserLive.Settings, :confirm_email
+
+      # OAuth integration routes
+      get "/auth/google", OauthController, :google
+      get "/auth/google/callback", OauthController, :google_callback
+      get "/auth/hubspot", OauthController, :hubspot
+      get "/auth/hubspot/callback", OauthController, :hubspot_callback
     end
 
     post "/users/update-password", UserSessionController, :update_password

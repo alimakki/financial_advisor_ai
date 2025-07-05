@@ -54,9 +54,6 @@ defmodule FinancialAdvisorAiWeb.Router do
       live "/", ChatLive, :index
       live "/users/settings/confirm-email/:token", UserLive.Settings, :confirm_email
 
-      # OAuth integration routes
-      get "/auth/google", OauthController, :google
-      get "/auth/google/callback", OauthController, :google_callback
       get "/auth/hubspot", OauthController, :hubspot
       get "/auth/hubspot/callback", OauthController, :hubspot_callback
     end
@@ -73,6 +70,10 @@ defmodule FinancialAdvisorAiWeb.Router do
       live "/users/log-in", UserLive.Login, :new
       live "/users/log-in/:token", UserLive.Confirmation, :new
     end
+
+    # OAuth integration routes
+    get "/auth/google", OauthController, :google
+    get "/auth/google/callback", OauthController, :google_callback
 
     post "/users/log-in", UserSessionController, :create
     delete "/users/log-out", UserSessionController, :delete

@@ -70,18 +70,20 @@ config :logger, :default_formatter,
   format: "$time $metadata[$level] $message\n",
   metadata: [:request_id]
 
-\
-# Configure Ueberauth for OAuth\
-config :ueberauth, Ueberauth,\
-  providers: [\
-    google: {Ueberauth.Strategy.Google, [\
-      default_scope: "email profile https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/calendar"\
-    ]}\
-  ]\
-\
-config :ueberauth, Ueberauth.Strategy.Google.OAuth,\
-  client_id: System.get_env("GOOGLE_CLIENT_ID"),\
+# Configure Ueberauth for OAuth
+config :ueberauth, Ueberauth,
+  providers: [
+    google: {Ueberauth.Strategy.Google,
+      [
+        default_scope:
+          "email profile https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/calendar"
+      ]}
+  ]
+
+config :ueberauth, Ueberauth.Strategy.Google.OAuth,
+  client_id: System.get_env("GOOGLE_CLIENT_ID"),
   client_secret: System.get_env("GOOGLE_CLIENT_SECRET")
+
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 

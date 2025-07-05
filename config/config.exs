@@ -67,8 +67,7 @@ config :tailwind,
 
 # Configures Elixir's Logger
 config :logger, :default_formatter,
-  format: "$time $metadata[$level] $message\n",
-  metadata: [:request_id]
+  format: "$time $metadata[$level] $message\n",_id]
 
 # Configure Ueberauth for OAuth
 config :ueberauth, Ueberauth,

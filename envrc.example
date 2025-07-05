@@ -1,0 +1,16 @@
+# OAuth Credentials
+export GOOGLE_CLIENT_ID=CHANGE_ME
+export GOOGLE_CLIENT_SECRET=CHANGE_ME
+
+# Phoenix config
+export PORT=4000
+export PHX_HOST=example.com
+export BASE_URL="https://example.com"
+
+# DB config
+export POOL_SIZE=5
+
+# API Keys
+export OPENAI_API_KEY=CHANGE_ME
+export OPENAI_BASE_URL="https://api.openai.com/v1/"
+

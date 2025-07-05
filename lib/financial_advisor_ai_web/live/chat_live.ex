@@ -275,9 +275,9 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash}>
-      <div class="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex">
-        <!-- Enhanced Sidebar -->
-        <div class="w-80 bg-white border-r border-gray-200 flex flex-col shadow-lg">
+      <div class="app-container">
+        <!-- Sidebar -->
+        <div class="sidebar">
           <!-- Header -->
           <div class="p-4 border-b border-gray-200 bg-gradient-to-r from-blue-600 to-blue-700">
             <button class="w-full flex items-center justify-center space-x-2 bg-white bg-opacity-20 hover:bg-opacity-30 text-white rounded-lg px-4 py-3 text-sm font-medium transition-all duration-200 backdrop-blur-sm">
@@ -292,8 +292,6 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
               <span>New Conversation</span>
             </button>
           </div>
-          
-    <!-- Conversations List -->
           <div class="flex-1 overflow-y-auto p-3 space-y-2">
             <%= for conversation <- @conversations do %>
               <div class={"p-3 hover:bg-gray-50 rounded-xl cursor-pointer transition-all duration-200 #{if conversation.id == @active_conversation.id, do: "border-l-4 border-blue-500 bg-blue-50", else: "border-l-4 border-transparent"}"}>
@@ -304,8 +302,6 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
               </div>
             <% end %>
           </div>
-          
-    <!-- Enhanced Integration Status -->
           <div class="p-4 border-t border-gray-200 bg-gray-50">
             <h4 class="text-sm font-semibold text-gray-700 mb-4 flex items-center">
               <svg class="w-4 h-4 mr-2 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
@@ -314,29 +310,6 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
               Connected Services
             </h4>
             <div class="space-y-3">
-              <div class="flex items-center justify-between p-3 rounded-lg bg-white border border-gray-200">
-                <div class="flex items-center space-x-3">
-                  <div class="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center">
-                    <svg class="w-4 h-4 text-red-600" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
-                      <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
-                    </svg>
-                  </div>
-                  <span class="text-sm font-medium text-gray-700">Gmail & Calendar</span>
-                </div>
-                <%= if @google_connected do %>
-                  <span class="px-2 py-1 text-xs font-medium text-green-700 bg-green-100 rounded-full">
-                    Connected
-                  </span>
-                <% else %>
-                  <a
-                    href="/auth/google"
-                    class="px-3 py-1 text-xs font-medium text-blue-700 bg-blue-100 hover:bg-blue-200 rounded-full transition-colors"
-                  >
-                    Connect
-                  </a>
-                <% end %>
-              </div>
 
               <div class="flex items-center justify-between p-3 rounded-lg bg-white border border-gray-200">
                 <div class="flex items-center space-x-3">
@@ -361,20 +334,18 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
                 <% end %>
               </div>
             </div>
-
-            <%= unless @google_connected or @hubspot_connected do %>
+            <%= unless @hubspot_connected do %>
               <div class="mt-4 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
                 <p class="text-xs text-blue-700 font-semibold mb-2">🚀 Get Started</p>
                 <p class="text-xs text-blue-600">
-                  Connect your accounts to unlock the full power of your AI assistant!
+                  Connect your HubSpot account to unlock the full power of your AI assistant!
                 </p>
               </div>
             <% end %>
           </div>
         </div>
-        
-    <!-- Enhanced Chat Area -->
-        <div class="flex-1 flex flex-col">
+        <!-- Chat Area -->
+        <div class="chat-area">
           <!-- Chat Header with Status -->
           <div class="px-6 py-4 border-b border-gray-200 bg-white shadow-sm">
             <div class="flex items-center justify-between">
@@ -385,7 +356,7 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
                 </p>
               </div>
               <div class="flex items-center space-x-2">
-                <%= if @google_connected and @hubspot_connected do %>
+                <%= if @hubspot_connected do %>
                   <span class="px-3 py-1 text-xs font-medium text-green-700 bg-green-100 rounded-full">
                     All Connected
                   </span>
@@ -397,9 +368,8 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
               </div>
             </div>
           </div>
-          
-    <!-- Messages with Enhanced Styling -->
-          <div class="flex-1 overflow-y-auto p-6 space-y-6" id="messages" phx-update="stream">
+          <!-- Messages -->
+          <div class="chat-messages p-6 space-y-6" id="messages" phx-update="stream">
             <%= for {id, message} <- @streams.messages do %>
               <div
                 id={id}
@@ -412,7 +382,6 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
                     </svg>
                   </div>
                 <% end %>
-
                 <div class="flex-1 max-w-3xl">
                   <div class={[
                     "rounded-2xl p-4 shadow-sm",
@@ -434,15 +403,13 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
                     {Calendar.strftime(message.inserted_at, "%I:%M %p")}
                   </p>
                 </div>
-
                 <%= if message.role == "user" do %>
                   <div class="w-8 h-8 bg-gradient-to-br from-gray-400 to-gray-500 rounded-full flex-shrink-0 shadow-lg">
                   </div>
                 <% end %>
               </div>
             <% end %>
-            
-    <!-- Typing Indicator -->
+            <!-- Typing Indicator -->
             <%= if @is_typing do %>
               <div class="flex space-x-3 animate-pulse">
                 <div class="w-8 h-8 bg-gradient-to-br from-blue-600 to-blue-700 rounded-full flex items-center justify-center flex-shrink-0">
@@ -468,8 +435,7 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
               </div>
             <% end %>
           </div>
-          
-    <!-- Enhanced Input Area -->
+          <!-- Input Area -->
           <div class="border-t border-gray-200 p-4 bg-white shadow-lg">
             <.form
               for={@message_form}

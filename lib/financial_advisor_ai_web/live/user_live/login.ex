@@ -124,6 +124,7 @@ defmodule FinancialAdvisorAiWeb.UserLive.Login do
   end
 
   defp local_mail_adapter? do
-    Application.get_env(:financial_advisor_ai, FinancialAdvisorAi.Mailer)[:adapter] == Swoosh.Adapters.Local
+    Application.get_env(:financial_advisor_ai, FinancialAdvisorAi.Mailer)[:adapter] ==
+      Swoosh.Adapters.Local
   end
 end

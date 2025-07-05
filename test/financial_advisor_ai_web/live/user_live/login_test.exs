@@ -27,7 +27,9 @@ defmodule FinancialAdvisorAiWeb.UserLive.LoginTest do
 
       assert html =~ "If your email is in our system"
 
-      assert FinancialAdvisorAi.Repo.get_by!(FinancialAdvisorAi.Accounts.UserToken, user_id: user.id).context ==
+      assert FinancialAdvisorAi.Repo.get_by!(FinancialAdvisorAi.Accounts.UserToken,
+               user_id: user.id
+             ).context ==
                "login"
     end
 

@@ -64,6 +64,9 @@ defmodule FinancialAdvisorAiWeb.ConversationLive.Index do
   @impl true
   def handle_info({type, %FinancialAdvisorAi.AI.Conversation{}}, socket)
       when type in [:created, :updated, :deleted] do
-    {:noreply, stream(socket, :conversations, AI.list_conversations(socket.assigns.current_scope), reset: true)}
+    {:noreply,
+     stream(socket, :conversations, AI.list_conversations(socket.assigns.current_scope),
+       reset: true
+     )}
   end
 end

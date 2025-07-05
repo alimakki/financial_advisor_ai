@@ -55,7 +55,13 @@ defmodule FinancialAdvisorAiWeb.ConversationLive.Form do
 
   @impl true
   def handle_event("validate", %{"conversation" => conversation_params}, socket) do
-    changeset = AI.change_conversation(socket.assigns.current_scope, socket.assigns.conversation, conversation_params)
+    changeset =
+      AI.change_conversation(
+        socket.assigns.current_scope,
+        socket.assigns.conversation,
+        conversation_params
+      )
+
     {:noreply, assign(socket, form: to_form(changeset, action: :validate))}
   end
 
@@ -64,7 +70,11 @@ defmodule FinancialAdvisorAiWeb.ConversationLive.Form do
   end
 
   defp save_conversation(socket, :edit, conversation_params) do
-    case AI.update_conversation(socket.assigns.current_scope, socket.assigns.conversation, conversation_params) do
+    case AI.update_conversation(
+           socket.assigns.current_scope,
+           socket.assigns.conversation,
+           conversation_params
+         ) do
       {:ok, conversation} ->
         {:noreply,
          socket

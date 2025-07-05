@@ -7,6 +7,7 @@ defmodule FinancialAdvisorAi.MixProject do
       version: "0.1.0",
       elixir: "~> 1.15",
       elixirc_paths: elixirc_paths(Mix.env()),
+      listeners: [Phoenix.CodeReloader],
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
       deps: deps()
@@ -54,6 +55,7 @@ defmodule FinancialAdvisorAi.MixProject do
       {:phoenix_live_view, "~> 1.0.9"},
       {:floki, ">= 0.30.0", only: :test},
       {:phoenix_live_dashboard, "~> 0.8.3"},
+      {:tidewave, "~> 0.1", only: :dev},
       {:esbuild, "~> 0.9", runtime: Mix.env() == :dev},
       {:tailwind, "~> 0.3", runtime: Mix.env() == :dev},
       {:heroicons,

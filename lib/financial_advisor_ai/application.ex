@@ -12,7 +12,8 @@ defmodule FinancialAdvisorAi.Application do
       FinancialAdvisorAi.Repo,
       {Ecto.Migrator,
        repos: Application.fetch_env!(:financial_advisor_ai, :ecto_repos), skip: skip_migrations?()},
-      {DNSCluster, query: Application.get_env(:financial_advisor_ai, :dns_cluster_query) || :ignore},
+      {DNSCluster,
+       query: Application.get_env(:financial_advisor_ai, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: FinancialAdvisorAi.PubSub},
       # Start a worker by calling: FinancialAdvisorAi.Worker.start_link(arg)
       # {FinancialAdvisorAi.Worker, arg},

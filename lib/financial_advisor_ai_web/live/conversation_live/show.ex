@@ -14,7 +14,10 @@ defmodule FinancialAdvisorAiWeb.ConversationLive.Show do
           <.button navigate={~p"/conversations"}>
             <.icon name="hero-arrow-left" />
           </.button>
-          <.button variant="primary" navigate={~p"/conversations/#{@conversation}/edit?return_to=show"}>
+          <.button
+            variant="primary"
+            navigate={~p"/conversations/#{@conversation}/edit?return_to=show"}
+          >
             <.icon name="hero-pencil-square" /> Edit conversation
           </.button>
         </:actions>

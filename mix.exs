@@ -32,6 +32,7 @@ defmodule FinancialAdvisorAi.MixProject do
   # Type `mix help deps` for examples and options.
   defp deps do
     [
+      {:bcrypt_elixir, "~> 3.0"},
       {:bandit, "~> 1.5"},
       # OAuth and integrations
       {:ueberauth, "~> 0.10"},

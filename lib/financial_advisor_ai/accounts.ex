@@ -305,4 +305,11 @@ defmodule FinancialAdvisorAi.Accounts do
       {:ok, user, expired_tokens}
     end
   end
+
+  @doc """
+  Returns a list of all users.
+  """
+  def list_users do
+    FinancialAdvisorAi.Repo.all(FinancialAdvisorAi.Accounts.User)
+  end
 end

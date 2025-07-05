@@ -77,6 +77,15 @@ defmodule FinancialAdvisorAi.Integrations.GmailService do
     end
   end
 
+  @doc """
+  Polls for new Gmail messages for the given user_id.
+  Returns a list of new message events (raw data).
+  """
+  def poll_new_messages(user_id) do
+    # TODO: Track last seen message, fetch new ones, return as events
+    {:ok, []}
+  end
+
   defp get_gmail_integration(user_id) do
     case AI.get_integration(user_id, "google") do
       nil -> {:error, :not_connected}

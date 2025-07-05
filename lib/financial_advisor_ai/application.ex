@@ -18,7 +18,8 @@ defmodule FinancialAdvisorAi.Application do
       # Start a worker by calling: FinancialAdvisorAi.Worker.start_link(arg)
       # {FinancialAdvisorAi.Worker, arg},
       # Start to serve requests, typically the last entry
-      FinancialAdvisorAiWeb.Endpoint
+      FinancialAdvisorAiWeb.Endpoint,
+      FinancialAdvisorAi.AI.PollingWorker
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html

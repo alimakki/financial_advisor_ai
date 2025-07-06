@@ -29,16 +29,16 @@ config :ueberauth, FinancialAdvisorAi.Auth.Strategy.Hubspot.OAuth,
   client_secret: System.get_env("HUBSPOT_CLIENT_SECRET")
 
 if config_env() == :prod do
-  database_path =
-    System.get_env("DATABASE_PATH") ||
-      raise """
-      environment variable DATABASE_PATH is missing.
-      For example: /etc/financial_advisor_ai/financial_advisor_ai.db
-      """
 
   config :financial_advisor_ai, FinancialAdvisorAi.Repo,
-    database: database_path,
-    pool_size: String.to_integer(System.get_env("POOL_SIZE") || "5")
+    database: System.get_env("DATABASE_NAME", "financial_advisor_ai"),
+    username: System.get_env("DATABASE_USERNAME", "postgres"),
+    password: System.get_env("DATABASE_PASSWORD", "postgres"),
+    hostname: System.get_env("DATABASE_HOST", "localhost"),
+    port: String.to_integer(System.get_env("DATABASE_PORT") || "5432"),
+    pool_size: String.to_integer(System.get_env("DATABASE_POOL_SIZE") || "10"),
+    stacktrace: true,
+    show_sensitive_data_on_connection_error: false
 
   # The secret key base is used to sign/encrypt cookies and other secrets.
   # A default value is used in config/dev.exs and config/test.exs but you

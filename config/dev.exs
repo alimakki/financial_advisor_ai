@@ -1,9 +1,13 @@
 import Config
 
-# Configure your database
+
 config :financial_advisor_ai, FinancialAdvisorAi.Repo,
-  database: Path.expand("../financial_advisor_ai_dev.db", __DIR__),
-  pool_size: 5,
+  database: "financial_advisor_ai",
+  username: "postgres",
+  password: "postgres",
+  hostname: "localhost",
+  port: 5432,
+  pool_size: 10,
   stacktrace: true,
   show_sensitive_data_on_connection_error: true
 

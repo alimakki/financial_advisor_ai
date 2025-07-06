@@ -1,6 +1,5 @@
 import Config
 
-
 config :financial_advisor_ai, FinancialAdvisorAi.Repo,
   database: "financial_advisor_ai",
   username: "postgres",

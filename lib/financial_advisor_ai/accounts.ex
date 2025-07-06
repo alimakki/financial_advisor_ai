@@ -312,4 +312,22 @@ defmodule FinancialAdvisorAi.Accounts do
   def list_users do
     FinancialAdvisorAi.Repo.all(FinancialAdvisorAi.Accounts.User)
   end
+
+  # Finds or creates a user from Google user info
+  @doc """
+  Finds or creates a user from Google user info map.
+  Expects at least %{"email" => email} in the map.
+  """
+  def get_or_create_user_from_google(%{"email" => email} = _user_info) when is_binary(email) do
+    case get_user_by_email(email) do
+      %User{} = user ->
+        {:ok, user}
+
+      nil ->
+        # You can add more fields from user_info if desired
+        register_user(%{email: email})
+    end
+  end
+
+  def get_or_create_user_from_google(_), do: {:error, :invalid_user_info}
 end

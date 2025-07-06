@@ -54,6 +54,7 @@ defmodule FinancialAdvisorAi.MixProject do
       {:phoenix_live_reload, "~> 1.2", only: :dev},
       {:phoenix_live_view, "~> 1.0.9"},
       {:floki, ">= 0.30.0", only: :test},
+      {:uniq, "~> 0.6.1"},
       {:phoenix_live_dashboard, "~> 0.8.3"},
       {:tidewave, "~> 0.1", only: :dev},
       {:esbuild, "~> 0.9", runtime: Mix.env() == :dev},

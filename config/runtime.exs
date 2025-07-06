@@ -29,7 +29,6 @@ config :ueberauth, FinancialAdvisorAi.Auth.Strategy.Hubspot.OAuth,
   client_secret: System.get_env("HUBSPOT_CLIENT_SECRET")
 
 if config_env() == :prod do
-
   config :financial_advisor_ai, FinancialAdvisorAi.Repo,
     database: System.get_env("DATABASE_NAME", "financial_advisor_ai"),
     username: System.get_env("DATABASE_USERNAME", "postgres"),

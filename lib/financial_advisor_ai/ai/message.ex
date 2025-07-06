@@ -1,6 +1,5 @@
 defmodule FinancialAdvisorAi.AI.Message do
-  use Ecto.Schema
-  import Ecto.Changeset
+  use FinancialAdvisorAi, :db_schema
 
   schema "messages" do
     field :role, :string
@@ -11,7 +10,7 @@ defmodule FinancialAdvisorAi.AI.Message do
 
     belongs_to :conversation, FinancialAdvisorAi.AI.Conversation
 
-    timestamps(type: :utc_datetime)
+    timestamps()
   end
 
   def changeset(message, attrs) do

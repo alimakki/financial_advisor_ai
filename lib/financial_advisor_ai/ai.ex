@@ -104,6 +104,8 @@ defmodule FinancialAdvisorAi.AI do
 
   # Integrations
 
+  def get_integration(user_id, provider) when is_nil(user_id) or is_nil(provider), do: nil
+
   def get_integration(user_id, provider) do
     Integration
     |> where([i], i.user_id == ^user_id and i.provider == ^provider)

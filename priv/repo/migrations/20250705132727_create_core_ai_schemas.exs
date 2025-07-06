@@ -3,7 +3,8 @@ defmodule FinancialAdvisorAi.Repo.Migrations.CreateCoreAiSchemas do
 
   def change do
     # Conversations table
-    create table(:conversations) do
+    create table(:conversations, primary_key: false) do
+      add :id, :binary_id, primary_key: true
       add :title, :string
       add :user_id, references(:users, on_delete: :delete_all), null: false
       add :status, :string, default: "active"
@@ -16,7 +17,8 @@ defmodule FinancialAdvisorAi.Repo.Migrations.CreateCoreAiSchemas do
     create index(:conversations, [:status])
 
     # Messages table
-    create table(:messages) do
+    create table(:messages, primary_key: false) do
+      add :id, :binary_id, primary_key: true
       add :conversation_id, references(:conversations, on_delete: :delete_all), null: false
       # "user", "assistant", "system"
       add :role, :string, null: false
@@ -34,7 +36,8 @@ defmodule FinancialAdvisorAi.Repo.Migrations.CreateCoreAiSchemas do
     create index(:messages, [:role])
 
     # Tasks table for persistent task management
-    create table(:tasks) do
+    create table(:tasks, primary_key: false) do
+      add :id, :binary_id, primary_key: true
       add :user_id, references(:users, on_delete: :delete_all), null: false
       add :conversation_id, references(:conversations, on_delete: :delete_all)
       add :title, :string, null: false
@@ -58,7 +61,8 @@ defmodule FinancialAdvisorAi.Repo.Migrations.CreateCoreAiSchemas do
     create index(:tasks, [:scheduled_for])
 
     # Ongoing instructions table
-    create table(:ongoing_instructions) do
+    create table(:ongoing_instructions, primary_key: false) do
+      add :id, :binary_id, primary_key: true
       add :user_id, references(:users, on_delete: :delete_all), null: false
       add :instruction, :text, null: false
       add :is_active, :boolean, default: true
@@ -73,7 +77,8 @@ defmodule FinancialAdvisorAi.Repo.Migrations.CreateCoreAiSchemas do
     create index(:ongoing_instructions, [:is_active])
 
     # Integrations table for storing OAuth tokens
-    create table(:integrations) do
+    create table(:integrations, primary_key: false) do
+      add :id, :binary_id, primary_key: true
       add :user_id, references(:users, on_delete: :delete_all), null: false
       # "google", "hubspot"
       add :provider, :string, null: false
@@ -91,7 +96,8 @@ defmodule FinancialAdvisorAi.Repo.Migrations.CreateCoreAiSchemas do
     create unique_index(:integrations, [:user_id, :provider])
 
     # Email embeddings for RAG
-    create table(:email_embeddings) do
+    create table(:email_embeddings, primary_key: false) do
+      add :id, :binary_id, primary_key: true
       add :user_id, references(:users, on_delete: :delete_all), null: false
       # Gmail message ID
       add :email_id, :string, null: false

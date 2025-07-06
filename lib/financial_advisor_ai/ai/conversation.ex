@@ -1,6 +1,5 @@
 defmodule FinancialAdvisorAi.AI.Conversation do
-  use Ecto.Schema
-  import Ecto.Changeset
+  use FinancialAdvisorAi, :db_schema
 
   schema "conversations" do
     field :title, :string
@@ -11,7 +10,7 @@ defmodule FinancialAdvisorAi.AI.Conversation do
     has_many :messages, FinancialAdvisorAi.AI.Message
     has_many :tasks, FinancialAdvisorAi.AI.Task
 
-    timestamps(type: :utc_datetime)
+    timestamps()
   end
 
   def changeset(conversation, attrs) do

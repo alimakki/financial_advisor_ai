@@ -177,7 +177,7 @@ defmodule FinancialAdvisorAi.Integrations.GmailService do
       subject: get_header(headers, "Subject"),
       from: get_header(headers, "From"),
       to: get_header(headers, "To"),
-      date: response["internalDate"] |> String.to_integer() |> DateTime.from_unix!(:second),
+      date: response["internalDate"] |> String.to_integer() |> DateTime.from_unix!(:millisecond),
       body: extract_body(payload),
       labels: response["labelIds"] || []
     }

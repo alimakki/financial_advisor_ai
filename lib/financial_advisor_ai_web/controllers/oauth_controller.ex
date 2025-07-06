@@ -137,7 +137,8 @@ defmodule FinancialAdvisorAiWeb.OauthController do
     client_id = get_hubspot_client_id()
     redirect_uri = get_hubspot_redirect_uri()
 
-    scope = "contacts oauth"
+    scope =
+      "crm.import crm.lists.read crm.lists.write crm.objects.companies.read crm.objects.companies.write crm.objects.contacts.read crm.objects.contacts.write crm.objects.deals.read crm.objects.deals.write crm.objects.feedback_submissions.read crm.objects.goals.read crm.objects.goals.write crm.objects.leads.read crm.objects.leads.write crm.objects.line_items.read crm.objects.line_items.write crm.objects.listings.read crm.objects.listings.write crm.objects.marketing_events.read crm.objects.marketing_events.write crm.objects.orders.read crm.objects.products.read crm.objects.products.write crm.objects.quotes.read crm.objects.services.read crm.objects.users.read crm.objects.users.write oauth"
 
     params = %{
       client_id: client_id,

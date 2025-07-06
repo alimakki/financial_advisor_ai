@@ -24,6 +24,10 @@ config :ueberauth, Ueberauth.Strategy.Google.OAuth,
   client_id: System.get_env("GOOGLE_CLIENT_ID"),
   client_secret: System.get_env("GOOGLE_CLIENT_SECRET")
 
+config :ueberauth, FinancialAdvisorAi.Auth.Strategy.Hubspot.OAuth,
+  client_id: System.get_env("HUBSPOT_CLIENT_ID"),
+  client_secret: System.get_env("HUBSPOT_CLIENT_SECRET")
+
 if config_env() == :prod do
   database_path =
     System.get_env("DATABASE_PATH") ||

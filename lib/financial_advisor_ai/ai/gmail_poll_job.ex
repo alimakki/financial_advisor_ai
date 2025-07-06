@@ -5,7 +5,7 @@ defmodule FinancialAdvisorAi.AI.GmailPollJob do
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"user_id" => user_id}}) do
-    GmailService.poll_and_import_new_messages(user_id)
+    # GmailService.poll_and_import_new_messages(user_id)
     :ok
   end
 end

@@ -44,14 +44,14 @@ defmodule FinancialAdvisorAi.Integrations.GmailService do
     # Store email embedding for RAG
     AI.create_email_embedding(%{
       user_id: user_id,
-      email_id: email_data["id"],
-      subject: email_data["subject"],
+      email_id: email_data[:id],
+      subject: email_data[:subject],
       content: content,
       sender: sender,
       recipient: extract_recipient(email_data),
       metadata: %{
-        thread_id: email_data["threadId"],
-        labels: email_data["labelIds"] || []
+        thread_id: email_data[:thread_id],
+        labels: email_data[:labels] || []
       }
     })
   end
@@ -80,10 +80,9 @@ defmodule FinancialAdvisorAi.Integrations.GmailService do
   Polls for new Gmail messages for the given user_id, imports them into the email_embeddings table, and updates the last seen message ID in the integration metadata.
   """
   def poll_and_import_new_messages(user_id) do
-    with {:ok, integration} <- get_gmail_integration(user_id) do
-      last_seen_id = Map.get(integration.metadata || %{}, "last_seen_gmail_id")
-      {:ok, messages} = list_messages(user_id, %{maxResults: 50})
-
+    with {:ok, integration} <- get_gmail_integration(user_id),
+         last_seen_id <- Map.get(integration.metadata || %{}, "last_seen_gmail_id"),
+         {:ok, messages} <- list_messages(user_id, %{maxResults: 50}) do
       new_messages =
         case last_seen_id do
           # First import: treat all as new (could limit to N)
@@ -193,7 +192,7 @@ defmodule FinancialAdvisorAi.Integrations.GmailService do
 
   defp extract_body(payload) do
     cond do
-      payload["body"]["data"] -> Base.decode64!(payload["body"]["data"])
+      payload["body"]["data"] -> Base.url_decode64!(payload["body"]["data"])
       payload["parts"] -> extract_body_from_parts(payload["parts"])
       true -> ""
     end
@@ -202,7 +201,7 @@ defmodule FinancialAdvisorAi.Integrations.GmailService do
   defp extract_body_from_parts(parts) do
     Enum.find_value(parts, "", fn part ->
       if part["mimeType"] == "text/plain" and part["body"]["data"] do
-        Base.decode64!(part["body"]["data"])
+        Base.url_decode64!(part["body"]["data"])
       end
     end)
   end
@@ -220,26 +219,41 @@ defmodule FinancialAdvisorAi.Integrations.GmailService do
   end
 
   defp extract_sender(email_data) do
-    email_data["from"] ||
-      email_data["payload"]["headers"]
-      |> Enum.find(fn h -> h["name"] == "From" end)
-      |> case do
-        %{"value" => value} -> value
-        _ -> "unknown"
-      end
+    email_data[:from]
+    |> extract_email_address()
+    |> case do
+      nil -> "unknown"
+      email -> email
+    end
   end
 
   defp extract_content(email_data) do
-    email_data["body"] || extract_body(email_data["payload"] || %{})
+    email_data[:body]
   end
 
   defp extract_recipient(email_data) do
-    email_data["to"] ||
-      email_data["payload"]["headers"]
-      |> Enum.find(fn h -> h["name"] == "To" end)
-      |> case do
-        %{"value" => value} -> value
-        _ -> "unknown"
-      end
+    email_data[:to]
+    |> extract_email_address()
+    |> case do
+      nil -> "unknown"
+      email -> email
+    end
+  end
+
+  defp extract_email_address(nil), do: nil
+
+  defp extract_email_address(str) when is_binary(str) do
+    # Regex to match email inside angle brackets, or just the email if no brackets
+    case Regex.run(~r/<([^>]+)>/, str) do
+      [_, email] ->
+        email
+
+      _ ->
+        # Try to match a plain email
+        case Regex.run(~r/([\w._%+-]+@[\w.-]+\.[A-Za-z]{2,})/, str) do
+          [email | _] -> email
+          _ -> nil
+        end
+    end
   end
 end

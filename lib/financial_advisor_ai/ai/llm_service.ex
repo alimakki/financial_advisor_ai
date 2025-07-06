@@ -18,14 +18,15 @@ defmodule FinancialAdvisorAi.AI.LlmService do
     model = Keyword.get(opts, :model, @default_model)
 
     system_prompt = build_system_prompt()
-    user_prompt = user_question #build_user_prompt(user_question, rag_context)
+    # build_user_prompt(user_question, rag_context)
+    user_prompt = user_question
 
     messages = [
       %{role: "system", content: system_prompt},
       %{role: "user", content: user_prompt}
     ]
 
-    case make_openai_request(messages, model) |> IO.inspect(label: "response") do
+    case make_openai_request(messages, model) do
       {:ok, %{"choices" => [choice]}} ->
         content = choice["message"]["content"] |> strip_think_tags()
         {:ok, content || "I apologize, but I couldn't generate a response at this time."}
@@ -43,7 +44,8 @@ defmodule FinancialAdvisorAi.AI.LlmService do
     model = Keyword.get(opts, :model, @default_model)
 
     system_prompt = build_system_prompt_with_tools()
-    user_prompt = user_question#build_user_prompt(user_question, rag_context)
+    # build_user_prompt(user_question, rag_context)
+    user_prompt = user_question
 
     messages = [
       %{role: "system", content: system_prompt},
@@ -58,6 +60,7 @@ defmodule FinancialAdvisorAi.AI.LlmService do
           {:ok, content} -> {:ok, strip_think_tags(content)}
           other -> other
         end
+
       {:error, reason} ->
         Logger.warning("OpenAI API with tools error: #{inspect(reason)}")
         {:ok, fallback_response(user_question, rag_context)}
@@ -125,10 +128,9 @@ defmodule FinancialAdvisorAi.AI.LlmService do
           email_context =
             if length(emails) > 0 do
               email_summaries =
-                Enum.map(emails, fn email ->
+                Enum.map_join("\n", emails, fn email ->
                   "- From: #{email.sender}\n  Subject: #{email.subject}\n  Preview: #{email.content_preview}"
                 end)
-                |> Enum.join("\n")
 
               "Relevant Emails:\n#{email_summaries}"
             else
@@ -138,10 +140,9 @@ defmodule FinancialAdvisorAi.AI.LlmService do
           contact_context =
             if length(contacts) > 0 do
               contact_summaries =
-                Enum.map(contacts, fn contact ->
+                Enum.map_join("\n", contacts, fn contact ->
                   "- #{contact.name} (#{contact.email}): #{contact.message_count} messages"
                 end)
-                |> Enum.join("\n")
 
               "\nRelevant Contacts:\n#{contact_summaries}"
             else
@@ -544,10 +545,9 @@ defmodule FinancialAdvisorAi.AI.LlmService do
               "search_emails" ->
                 if length(result.results) > 0 do
                   email_summaries =
-                    Enum.map(result.results, fn email ->
+                    Enum.map_join("\n", result.results, fn email ->
                       "• #{email.sender}: #{email.subject}"
                     end)
-                    |> Enum.join("\n")
 
                   "Found #{length(result.results)} emails for '#{result.query}':\n#{email_summaries}"
                 else
@@ -619,5 +619,6 @@ defmodule FinancialAdvisorAi.AI.LlmService do
     Regex.replace(~r/<think>[\s\S]*?<\/think>/, text, "")
     |> String.trim()
   end
+
   defp strip_think_tags(text), do: text
 end

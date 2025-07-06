@@ -310,7 +310,6 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
               Connected Services
             </h4>
             <div class="space-y-3">
-
               <div class="flex items-center justify-between p-3 rounded-lg bg-white border border-gray-200">
                 <div class="flex items-center space-x-3">
                   <div class="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center">

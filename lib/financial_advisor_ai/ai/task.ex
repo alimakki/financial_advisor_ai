@@ -21,6 +21,7 @@ defmodule FinancialAdvisorAi.AI.Task do
   def changeset(task, attrs) do
     task
     |> cast(attrs, [
+      :id,
       :title,
       :description,
       :status,

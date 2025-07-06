@@ -6,7 +6,7 @@ defmodule FinancialAdvisorAi.Repo.Migrations.CreateCoreAiSchemas do
     create table(:conversations, primary_key: false) do
       add :id, :binary_id, primary_key: true
       add :title, :string
-      add :user_id, references(:users, on_delete: :delete_all), null: false
+      add :user_id, references(:users, on_delete: :delete_all, type: :binary_id), null: false
       add :status, :string, default: "active"
       add :metadata, :map, default: %{}
 
@@ -19,7 +19,7 @@ defmodule FinancialAdvisorAi.Repo.Migrations.CreateCoreAiSchemas do
     # Messages table
     create table(:messages, primary_key: false) do
       add :id, :binary_id, primary_key: true
-      add :conversation_id, references(:conversations, on_delete: :delete_all), null: false
+      add :conversation_id, references(:conversations, on_delete: :delete_all, type: :binary_id), null: false
       # "user", "assistant", "system"
       add :role, :string, null: false
       add :content, :text, null: false
@@ -29,7 +29,7 @@ defmodule FinancialAdvisorAi.Repo.Migrations.CreateCoreAiSchemas do
       # For storing tool call results
       add :tool_results, :map
 
-      timestamps(type: :utc_datetime)
+      timestamps()
     end
 
     create index(:messages, [:conversation_id])
@@ -38,8 +38,8 @@ defmodule FinancialAdvisorAi.Repo.Migrations.CreateCoreAiSchemas do
     # Tasks table for persistent task management
     create table(:tasks, primary_key: false) do
       add :id, :binary_id, primary_key: true
-      add :user_id, references(:users, on_delete: :delete_all), null: false
-      add :conversation_id, references(:conversations, on_delete: :delete_all)
+      add :user_id, references(:users, on_delete: :delete_all, type: :binary_id), null: false
+      add :conversation_id, references(:conversations, on_delete: :delete_all, type: :binary_id)
       add :title, :string, null: false
       add :description, :text
       # pending, in_progress, completed, failed
@@ -52,7 +52,7 @@ defmodule FinancialAdvisorAi.Repo.Migrations.CreateCoreAiSchemas do
       add :scheduled_for, :utc_datetime
       add :completed_at, :utc_datetime
 
-      timestamps(type: :utc_datetime)
+      timestamps()
     end
 
     create index(:tasks, [:user_id])
@@ -63,14 +63,14 @@ defmodule FinancialAdvisorAi.Repo.Migrations.CreateCoreAiSchemas do
     # Ongoing instructions table
     create table(:ongoing_instructions, primary_key: false) do
       add :id, :binary_id, primary_key: true
-      add :user_id, references(:users, on_delete: :delete_all), null: false
+      add :user_id, references(:users, on_delete: :delete_all, type: :binary_id), null: false
       add :instruction, :text, null: false
       add :is_active, :boolean, default: true
       # ["email_received", "calendar_updated", etc.]
       add :trigger_events, {:array, :string}, default: []
       add :priority, :integer, default: 1
 
-      timestamps(type: :utc_datetime)
+      timestamps()
     end
 
     create index(:ongoing_instructions, [:user_id])
@@ -79,7 +79,7 @@ defmodule FinancialAdvisorAi.Repo.Migrations.CreateCoreAiSchemas do
     # Integrations table for storing OAuth tokens
     create table(:integrations, primary_key: false) do
       add :id, :binary_id, primary_key: true
-      add :user_id, references(:users, on_delete: :delete_all), null: false
+      add :user_id, references(:users, on_delete: :delete_all, type: :binary_id), null: false
       # "google", "hubspot"
       add :provider, :string, null: false
       add :access_token, :text
@@ -88,7 +88,7 @@ defmodule FinancialAdvisorAi.Repo.Migrations.CreateCoreAiSchemas do
       add :scope, :string
       add :metadata, :map, default: %{}
 
-      timestamps(type: :utc_datetime)
+      timestamps()
     end
 
     create index(:integrations, [:user_id])
@@ -98,7 +98,7 @@ defmodule FinancialAdvisorAi.Repo.Migrations.CreateCoreAiSchemas do
     # Email embeddings for RAG
     create table(:email_embeddings, primary_key: false) do
       add :id, :binary_id, primary_key: true
-      add :user_id, references(:users, on_delete: :delete_all), null: false
+      add :user_id, references(:users, on_delete: :delete_all, type: :binary_id), null: false
       # Gmail message ID
       add :email_id, :string, null: false
       add :subject, :string
@@ -109,7 +109,7 @@ defmodule FinancialAdvisorAi.Repo.Migrations.CreateCoreAiSchemas do
       add :embedding, :binary
       add :metadata, :map, default: %{}
 
-      timestamps(type: :utc_datetime)
+      timestamps()
     end
 
     create index(:email_embeddings, [:user_id])

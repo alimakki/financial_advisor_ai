@@ -18,6 +18,7 @@ defmodule FinancialAdvisorAi.AI.EmailEmbedding do
   def changeset(email_embedding, attrs) do
     email_embedding
     |> cast(attrs, [
+      :id,
       :email_id,
       :subject,
       :content,

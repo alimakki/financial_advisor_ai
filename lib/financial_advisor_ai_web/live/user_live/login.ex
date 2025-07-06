@@ -44,6 +44,10 @@ defmodule FinancialAdvisorAiWeb.UserLive.Login do
                 height="20"
                 viewBox="0 0 20 20"
                 fill="none"
+                Log
+                in
+                with
+                Google
                 xmlns="http://www.w3.org/2000/svg"
               >
                 <g clip-path="url(#clip0_993_771)">

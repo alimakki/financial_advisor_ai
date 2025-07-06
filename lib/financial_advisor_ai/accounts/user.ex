@@ -24,7 +24,7 @@ defmodule FinancialAdvisorAi.Accounts.User do
   """
   def email_changeset(user, attrs, opts \\ []) do
     user
-    |> cast(attrs, [:email])
+    |> cast(attrs, [:id, :email])
     |> validate_email(opts)
   end
 

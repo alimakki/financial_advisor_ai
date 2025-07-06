@@ -22,7 +22,7 @@ config :financial_advisor_ai, :scopes,
 
 config :financial_advisor_ai,
   ecto_repos: [FinancialAdvisorAi.Repo],
-  generators: [timestamp_type: :utc_datetime]
+  generators: [timestamp_type: :utc_datetime_usec, binary_id: {Uniq.UUID, :uuid7, []}]
 
 # Configures the endpoint
 config :financial_advisor_ai, FinancialAdvisorAiWeb.Endpoint,

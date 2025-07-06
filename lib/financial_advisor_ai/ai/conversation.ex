@@ -15,7 +15,7 @@ defmodule FinancialAdvisorAi.AI.Conversation do
 
   def changeset(conversation, attrs) do
     conversation
-    |> cast(attrs, [:title, :status, :metadata, :user_id])
+    |> cast(attrs, [:id, :title, :status, :metadata, :user_id])
     |> validate_required([:user_id])
     |> validate_inclusion(:status, ["active", "archived", "completed"])
   end

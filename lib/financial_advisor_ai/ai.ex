@@ -113,16 +113,19 @@ defmodule FinancialAdvisorAi.AI do
   end
 
   def upsert_integration(attrs) do
-    case get_integration(attrs.user_id, attrs.provider) do
+    case get_integration(attrs.user_id, attrs.provider)
+         |> IO.inspect(label: "existing integration") do
       nil ->
         %Integration{}
         |> Integration.changeset(attrs)
         |> Repo.insert()
+        |> IO.inspect(label: "inserting integration")
 
       existing ->
         existing
         |> Integration.changeset(attrs)
         |> Repo.update()
+        |> IO.inspect(label: "updating integration")
     end
   end
 

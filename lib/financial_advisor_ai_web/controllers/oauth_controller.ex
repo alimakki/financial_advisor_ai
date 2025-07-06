@@ -1,8 +1,7 @@
 defmodule FinancialAdvisorAiWeb.OauthController do
   use FinancialAdvisorAiWeb, :controller
 
-  alias FinancialAdvisorAi.AI
-  alias FinancialAdvisorAi.Accounts.User
+  alias FinancialAdvisorAi.{AI, Repo}
 
   @doc """
   Initiates OAuth flow for Google (Gmail + Calendar)
@@ -23,22 +22,26 @@ defmodule FinancialAdvisorAiWeb.OauthController do
             # Find or create user in DB
             case FinancialAdvisorAi.Accounts.get_or_create_user_from_google(user_info) do
               {:ok, user} ->
-                integration_attrs = %{
-                  user_id: user.id,
-                  provider: "google",
-                  access_token: tokens["access_token"],
-                  refresh_token: tokens["refresh_token"],
-                  expires_at: calculate_expires_at(tokens["expires_in"]),
-                  scope: tokens["scope"],
-                  metadata: %{
-                    token_type: tokens["token_type"]
+                integration_attrs =
+                  %{
+                    user_id: user.id,
+                    provider: "google",
+                    access_token: tokens["access_token"],
+                    refresh_token: tokens["refresh_token"],
+                    expires_at: calculate_expires_at(tokens["expires_in"]),
+                    scope: tokens["scope"],
+                    metadata: %{
+                      token_type: tokens["token_type"]
+                    }
                   }
-                }
 
                 case AI.upsert_integration(integration_attrs) do
                   {:ok, _integration} ->
-                    conn
-                    |> assign(:current_scope, %{user: user})
+                    FinancialAdvisorAiWeb.UserAuth.log_in_user(
+                      conn,
+                      user,
+                      %{}
+                    )
                     |> put_flash(
                       :info,
                       "Successfully connected to Google! Gmail and Calendar access enabled."
@@ -106,7 +109,11 @@ defmodule FinancialAdvisorAiWeb.OauthController do
 
         case AI.upsert_integration(integration_attrs) do
           {:ok, _integration} ->
-            conn
+            FinancialAdvisorAiWeb.UserAuth.log_in_user(
+              conn,
+              conn.assigns.current_scope.user,
+              %{}
+            )
             |> put_flash(:info, "Successfully connected to HubSpot! CRM access enabled.")
             |> redirect(to: ~p"/")
 

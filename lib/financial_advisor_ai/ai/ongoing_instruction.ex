@@ -14,7 +14,7 @@ defmodule FinancialAdvisorAi.AI.OngoingInstruction do
 
   def changeset(instruction, attrs) do
     instruction
-    |> cast(attrs, [:instruction, :is_active, :trigger_events, :priority, :user_id])
+    |> cast(attrs, [:id, :instruction, :is_active, :trigger_events, :priority, :user_id])
     |> validate_required([:instruction, :user_id])
     |> validate_number(:priority, greater_than: 0)
   end

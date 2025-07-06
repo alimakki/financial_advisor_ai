@@ -17,6 +17,7 @@ defmodule FinancialAdvisorAi.AI.Integration do
   def changeset(integration, attrs) do
     integration
     |> cast(attrs, [
+      :id,
       :provider,
       :access_token,
       :refresh_token,

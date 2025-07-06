@@ -19,7 +19,10 @@ defmodule FinancialAdvisorAi.Repo.Migrations.CreateCoreAiSchemas do
     # Messages table
     create table(:messages, primary_key: false) do
       add :id, :binary_id, primary_key: true
-      add :conversation_id, references(:conversations, on_delete: :delete_all, type: :binary_id), null: false
+
+      add :conversation_id, references(:conversations, on_delete: :delete_all, type: :binary_id),
+        null: false
+
       # "user", "assistant", "system"
       add :role, :string, null: false
       add :content, :text, null: false

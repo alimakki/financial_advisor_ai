@@ -4,7 +4,6 @@ defmodule FinancialAdvisorAi.Integrations.GmailService do
   """
 
   alias FinancialAdvisorAi.AI
-  alias FinancialAdvisorAi.AI.Integration
 
   @gmail_base_url "https://gmail.googleapis.com/gmail/v1"
 
@@ -78,12 +77,56 @@ defmodule FinancialAdvisorAi.Integrations.GmailService do
   end
 
   @doc """
-  Polls for new Gmail messages for the given user_id.
-  Returns a list of new message events (raw data).
+  Polls for new Gmail messages for the given user_id, imports them into the email_embeddings table, and updates the last seen message ID in the integration metadata.
   """
-  def poll_new_messages(user_id) do
-    # TODO: Track last seen message, fetch new ones, return as events
-    {:ok, []}
+  def poll_and_import_new_messages(user_id) do
+    with {:ok, integration} <- get_gmail_integration(user_id) do
+      last_seen_id = Map.get(integration.metadata || %{}, "last_seen_gmail_id")
+      {:ok, messages} = list_messages(user_id, %{maxResults: 50})
+
+      new_messages =
+        case last_seen_id do
+          # First import: treat all as new (could limit to N)
+          nil ->
+            messages
+
+          _ ->
+            # Only messages more recent than last_seen_id
+            Enum.take_while(messages, fn msg -> msg["id"] != last_seen_id end)
+        end
+
+      # Process in reverse order (oldest first)
+      new_messages = Enum.reverse(new_messages)
+
+      Enum.each(new_messages, fn msg ->
+        case get_message(user_id, msg["id"]) do
+          {:ok, email_data} ->
+            # Store embedding for RAG
+            create_contact_from_email(user_id, email_data)
+
+          _ ->
+            :noop
+        end
+      end)
+
+      # Update last_seen_gmail_id in integration metadata if we processed any new messages
+      if new_messages != [] do
+        new_metadata =
+          Map.put(
+            integration.metadata || %{},
+            "last_seen_gmail_id",
+            List.last(new_messages)["id"]
+          )
+
+        integration
+        |> Ecto.Changeset.change(metadata: new_metadata)
+        |> FinancialAdvisorAi.Repo.update()
+      else
+        :ok
+      end
+    else
+      error -> error
+    end
   end
 
   defp get_gmail_integration(user_id) do

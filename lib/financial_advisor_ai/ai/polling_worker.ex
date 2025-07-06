@@ -42,7 +42,14 @@ defmodule FinancialAdvisorAi.AI.PollingWorker do
   """
   def poll_all_users do
     for user <- Accounts.list_users() do
-      poll_user(user.id)
+      # Only enqueue for users with a Google integration
+      case FinancialAdvisorAi.AI.get_integration(user.id, "google") do
+        nil ->
+          :noop
+
+        _integration ->
+          Oban.insert(FinancialAdvisorAi.AI.GmailPollJob.new(%{"user_id" => user.id}))
+      end
     end
   end
 

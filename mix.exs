@@ -72,7 +72,8 @@ defmodule FinancialAdvisorAi.MixProject do
       {:telemetry_metrics, "~> 1.0"},
       {:telemetry_poller, "~> 1.0"},
       {:jason, "~> 1.2"},
-      {:dns_cluster, "~> 0.1.1"}
+      {:dns_cluster, "~> 0.1.1"},
+      {:oban, "~> 2.17"}
     ]
   end
 

@@ -19,7 +19,8 @@ defmodule FinancialAdvisorAi.Application do
       # {FinancialAdvisorAi.Worker, arg},
       # Start to serve requests, typically the last entry
       FinancialAdvisorAiWeb.Endpoint,
-      FinancialAdvisorAi.AI.PollingWorker
+      FinancialAdvisorAi.AI.PollingWorker,
+      {Oban, oban_config()}
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
@@ -39,5 +40,9 @@ defmodule FinancialAdvisorAi.Application do
   defp skip_migrations?() do
     # By default, sqlite migrations are run when using a release
     System.get_env("RELEASE_NAME") == nil
+  end
+
+  defp oban_config do
+    Application.fetch_env!(:financial_advisor_ai, Oban)
   end
 end

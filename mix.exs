@@ -51,6 +51,7 @@ defmodule FinancialAdvisorAi.MixProject do
       {:ecto_sql, "~> 3.10"},
       {:ecto_psql_extras, "~> 0.8.0"},
       {:postgrex, "~> 0.20.0"},
+      {:pgvector, "~> 0.3.0"},
       {:phoenix_html, "~> 4.1"},
       {:phoenix_live_reload, "~> 1.2", only: :dev},
       {:phoenix_live_view, "~> 1.0.9"},

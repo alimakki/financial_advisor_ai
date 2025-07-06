@@ -48,6 +48,7 @@ defmodule FinancialAdvisorAi.Integrations.GmailService do
       subject: email_data[:subject],
       content: content,
       sender: sender,
+      date: email_data[:date],
       recipient: extract_recipient(email_data),
       metadata: %{
         thread_id: email_data[:thread_id],
@@ -82,7 +83,7 @@ defmodule FinancialAdvisorAi.Integrations.GmailService do
   def poll_and_import_new_messages(user_id) do
     with {:ok, integration} <- get_gmail_integration(user_id),
          last_seen_id <- Map.get(integration.metadata || %{}, "last_seen_gmail_id"),
-         {:ok, messages} <- list_messages(user_id, %{maxResults: 50}) do
+         {:ok, messages} <- list_messages(user_id, %{maxResults: 1}) do
       new_messages =
         case last_seen_id do
           # First import: treat all as new (could limit to N)
@@ -177,7 +178,7 @@ defmodule FinancialAdvisorAi.Integrations.GmailService do
       subject: get_header(headers, "Subject"),
       from: get_header(headers, "From"),
       to: get_header(headers, "To"),
-      date: get_header(headers, "Date"),
+      date: get_header(headers, "Date") |> DateTime.from_iso8601(),
       body: extract_body(payload),
       labels: response["labelIds"] || []
     }

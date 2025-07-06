@@ -108,8 +108,10 @@ defmodule FinancialAdvisorAi.Repo.Migrations.CreateCoreAiSchemas do
       add :content, :text
       add :sender, :string
       add :recipient, :string
-      # Will store vector embeddings
-      add :embedding, :binary
+      add :date, :utc_datetime
+
+      # Assuming OpenAI's embedding size
+      add :embedding, :vector, size: 1536
       add :metadata, :map, default: %{}
 
       timestamps()
@@ -118,5 +120,7 @@ defmodule FinancialAdvisorAi.Repo.Migrations.CreateCoreAiSchemas do
     create index(:email_embeddings, [:user_id])
     create index(:email_embeddings, [:email_id])
     create index(:email_embeddings, [:sender])
+    # pgvector search
+    create index(:email_embeddings, [:embedding], using: :ivfflat)
   end
 end

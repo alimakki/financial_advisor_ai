@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:17.5-alpine
+    image: pgvector/pgvector:0.8.0-pg17
     ports:
       - '5432:5432' # postges port
     environment:
@@ -9,8 +9,7 @@ services:
       - POSTGRES_PASSWORD=postgres
       - PGDATA=/var/lib/postgresql/pgdata
     volumes:
-      - ~/.jump/pg17:/var/lib/postgresql/pgdata
-      - ./init:/docker-entrypoint-initdb.d
+      - ~/.jump/pgvector:/var/lib/postgresql/pgdata
     command:
       - "postgres"
       - "-c"

@@ -168,7 +168,7 @@ defmodule FinancialAdvisorAi.Integrations.GmailService do
     {:error, error}
   end
 
-  defp parse_message(response) do
+  def parse_message(response) do
     payload = response["payload"] || %{}
     headers = payload["headers"] || []
 
@@ -178,7 +178,7 @@ defmodule FinancialAdvisorAi.Integrations.GmailService do
       subject: get_header(headers, "Subject"),
       from: get_header(headers, "From"),
       to: get_header(headers, "To"),
-      date: get_header(headers, "Date") |> DateTime.from_iso8601(),
+      date: response["internalDate"] |> String.to_integer() |> DateTime.from_unix!(:second),
       body: extract_body(payload),
       labels: response["labelIds"] || []
     }

@@ -7,8 +7,8 @@ defmodule FinancialAdvisorAi.AI.LlmService do
   require Logger
   alias FinancialAdvisorAi.Integrations.CalendarService
 
-  @openai_api_url "https://api.openai.com/v1"
-  @default_model "gpt-4o-mini"
+  # @openai_api_url "https://api.openai.com/v1"
+  @default_model "qwen/qwen3-4b"
 
   @doc """
   Generates an AI response based on user question and RAG context.
@@ -17,16 +17,16 @@ defmodule FinancialAdvisorAi.AI.LlmService do
     model = Keyword.get(opts, :model, @default_model)
 
     system_prompt = build_system_prompt()
-    user_prompt = build_user_prompt(user_question, rag_context)
+    user_prompt = user_question #build_user_prompt(user_question, rag_context)
 
     messages = [
       %{role: "system", content: system_prompt},
       %{role: "user", content: user_prompt}
     ]
 
-    case make_openai_request(messages, model) do
-      {:ok, response} ->
-        content = get_in(response, ["choices", Access.at(0), "message", "content"])
+    case make_openai_request(messages, model) |> IO.inspect(label: "response") do
+      {:ok, %{"choices" => [choice]}} ->
+        content = choice["message"]["content"] |> strip_think_tags()
         {:ok, content || "I apologize, but I couldn't generate a response at this time."}
 
       {:error, reason} ->
@@ -42,7 +42,7 @@ defmodule FinancialAdvisorAi.AI.LlmService do
     model = Keyword.get(opts, :model, @default_model)
 
     system_prompt = build_system_prompt_with_tools()
-    user_prompt = build_user_prompt(user_question, rag_context)
+    user_prompt = user_question#build_user_prompt(user_question, rag_context)
 
     messages = [
       %{role: "system", content: system_prompt},
@@ -53,8 +53,10 @@ defmodule FinancialAdvisorAi.AI.LlmService do
 
     case make_openai_request_with_tools(messages, model, tools) do
       {:ok, response} ->
-        parse_tool_response(response, user_id, rag_context)
-
+        case parse_tool_response(response, user_id, rag_context) do
+          {:ok, content} -> {:ok, strip_think_tags(content)}
+          other -> other
+        end
       {:error, reason} ->
         Logger.warning("OpenAI API with tools error: #{inspect(reason)}")
         {:ok, fallback_response(user_question, rag_context)}
@@ -68,7 +70,7 @@ defmodule FinancialAdvisorAi.AI.LlmService do
     You are an AI Financial Advisor Assistant. You help financial advisors with:
 
     1. Answering questions about clients based on email communications and CRM data
-    2. Scheduling appointments and managing calendar events  
+    2. Scheduling appointments and managing calendar events
     3. Creating and managing contacts in HubSpot CRM
     4. Sending emails on behalf of the advisor
     5. Providing insights and analysis based on available data
@@ -78,7 +80,7 @@ defmodule FinancialAdvisorAi.AI.LlmService do
     - Calendar events (via Google Calendar integration)
     - CRM contacts and notes (via HubSpot integration)
 
-    Be professional, helpful, and accurate. When you don't have enough information to answer a question, 
+    Be professional, helpful, and accurate. When you don't have enough information to answer a question,
     say so clearly and suggest ways to get the needed information.
 
     For questions about specific people or events, always reference the available context data.
@@ -150,10 +152,15 @@ defmodule FinancialAdvisorAi.AI.LlmService do
     Available Context:
     #{context_section}
 
-    Please provide a helpful response based on the available context. If the user is asking you to 
-    perform an action (like scheduling a meeting, sending an email, etc.), use the appropriate tools 
+    Please provide a helpful response based on the available context. If the user is asking you to
+    perform an action (like scheduling a meeting, sending an email, etc.), use the appropriate tools
     to complete the task. Always explain what you're doing.
     """
+  end
+
+  defp openai_api_url do
+    System.get_env("OPENAI_BASE_URL") ||
+      Application.get_env(:financial_advisor_ai, :openai_api_url)
   end
 
   defp make_openai_request(messages, model) do
@@ -174,7 +181,7 @@ defmodule FinancialAdvisorAi.AI.LlmService do
         temperature: 0.7
       }
 
-      case Req.post("#{@openai_api_url}/chat/completions", headers: headers, json: body) do
+      case Req.post("#{openai_api_url()}/chat/completions", headers: headers, json: body) do
         {:ok, %{status: 200, body: response}} -> {:ok, response}
         {:ok, %{status: status, body: body}} -> {:error, {status, body}}
         {:error, error} -> {:error, error}
@@ -202,7 +209,7 @@ defmodule FinancialAdvisorAi.AI.LlmService do
         temperature: 0.7
       }
 
-      case Req.post("#{@openai_api_url}/chat/completions", headers: headers, json: body) do
+      case Req.post("#{openai_api_url()}/chat/completions", headers: headers, json: body) do
         {:ok, %{status: 200, body: response}} -> {:ok, response}
         {:ok, %{status: status, body: body}} -> {:error, {status, body}}
         {:error, error} -> {:error, error}
@@ -577,4 +584,11 @@ defmodule FinancialAdvisorAi.AI.LlmService do
         "Based on your question \"#{user_question}\", I found #{email_count} relevant emails and #{contact_count} related contacts. However, I'm currently unable to connect to the AI service to provide a detailed analysis. Please try again in a moment, or feel free to ask a more specific question about the information you're looking for."
     end
   end
+
+  # Utility function to strip <think>...</think> blocks from LLM output
+  defp strip_think_tags(text) when is_binary(text) do
+    Regex.replace(~r/<think>[\s\S]*?<\/think>/, text, "")
+    |> String.trim()
+  end
+  defp strip_think_tags(text), do: text
 end

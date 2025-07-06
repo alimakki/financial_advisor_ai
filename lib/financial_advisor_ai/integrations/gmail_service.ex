@@ -16,9 +16,8 @@ defmodule FinancialAdvisorAi.Integrations.GmailService do
     end
   end
 
-  def get_message(user_id, message_id) do
-    with {:ok, integration} <- get_gmail_integration(user_id),
-         {:ok, response} <- make_gmail_request(integration, "/users/me/messages/#{message_id}") do
+  def get_message(integration, message_id) do
+    with {:ok, response} <- make_gmail_request(integration, "/users/me/messages/#{message_id}") do
       {:ok, parse_message(response)}
     else
       error -> error
@@ -64,7 +63,7 @@ defmodule FinancialAdvisorAi.Integrations.GmailService do
 
       detailed_messages =
         Enum.map(messages, fn msg ->
-          case get_message(user_id, msg["id"]) do
+          case get_message(integration, msg["id"]) do
             {:ok, detailed} -> detailed
             _ -> nil
           end
@@ -83,7 +82,7 @@ defmodule FinancialAdvisorAi.Integrations.GmailService do
   def poll_and_import_new_messages(user_id) do
     with {:ok, integration} <- get_gmail_integration(user_id),
          last_seen_id <- Map.get(integration.metadata || %{}, "last_seen_gmail_id"),
-         {:ok, messages} <- list_messages(user_id, %{maxResults: 1}) do
+         {:ok, messages} <- list_messages(user_id, %{maxResults: 50}) do
       new_messages =
         case last_seen_id do
           # First import: treat all as new (could limit to N)
@@ -99,7 +98,7 @@ defmodule FinancialAdvisorAi.Integrations.GmailService do
       new_messages = Enum.reverse(new_messages)
 
       Enum.each(new_messages, fn msg ->
-        case get_message(user_id, msg["id"]) do
+        case get_message(integration, msg["id"]) do
           {:ok, email_data} ->
             # Store embedding for RAG
             create_contact_from_email(user_id, email_data)

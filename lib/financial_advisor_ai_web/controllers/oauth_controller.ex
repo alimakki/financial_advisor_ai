@@ -1,7 +1,7 @@
 defmodule FinancialAdvisorAiWeb.OauthController do
   use FinancialAdvisorAiWeb, :controller
 
-  alias FinancialAdvisorAi.{AI, Repo}
+  alias FinancialAdvisorAi.AI
 
   @doc """
   Initiates OAuth flow for Google (Gmail + Calendar)

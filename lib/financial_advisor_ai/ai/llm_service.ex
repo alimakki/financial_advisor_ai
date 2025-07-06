@@ -5,6 +5,7 @@ defmodule FinancialAdvisorAi.AI.LlmService do
   """
 
   require Logger
+  alias FinancialAdvisorAi.Repo
   alias FinancialAdvisorAi.Integrations.CalendarService
 
   # @openai_api_url "https://api.openai.com/v1"
@@ -61,6 +62,10 @@ defmodule FinancialAdvisorAi.AI.LlmService do
         Logger.warning("OpenAI API with tools error: #{inspect(reason)}")
         {:ok, fallback_response(user_question, rag_context)}
     end
+  end
+
+  def create_embedding(text_data) do
+    make_embedding_request(text_data, @default_model)
   end
 
   # Private functions
@@ -182,6 +187,30 @@ defmodule FinancialAdvisorAi.AI.LlmService do
       }
 
       case Req.post("#{openai_api_url()}/chat/completions", headers: headers, json: body) do
+        {:ok, %{status: 200, body: response}} -> {:ok, response}
+        {:ok, %{status: status, body: body}} -> {:error, {status, body}}
+        {:error, error} -> {:error, error}
+      end
+    end
+  end
+
+  defp make_embedding_request(text_data, model) do
+    api_key = get_api_key()
+
+    if is_nil(api_key) do
+      {:error, :no_api_key}
+    else
+      headers = [
+        {"Authorization", "Bearer #{api_key}"},
+        {"Content-Type", "application/json"}
+      ]
+
+      body = %{
+        model: model,
+        input: text_data
+      }
+
+      case Req.post("#{openai_api_url()}/embeddings", headers: headers, json: body) do
         {:ok, %{status: 200, body: response}} -> {:ok, response}
         {:ok, %{status: status, body: body}} -> {:error, {status, body}}
         {:error, error} -> {:error, error}

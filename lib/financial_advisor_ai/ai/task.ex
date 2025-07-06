@@ -1,6 +1,5 @@
 defmodule FinancialAdvisorAi.AI.Task do
-  use Ecto.Schema
-  import Ecto.Changeset
+  use FinancialAdvisorAi, :db_schema
 
   schema "tasks" do
     field :title, :string
@@ -16,12 +15,13 @@ defmodule FinancialAdvisorAi.AI.Task do
     belongs_to :user, FinancialAdvisorAi.Accounts.User
     belongs_to :conversation, FinancialAdvisorAi.AI.Conversation
 
-    timestamps(type: :utc_datetime)
+    timestamps()
   end
 
   def changeset(task, attrs) do
     task
     |> cast(attrs, [
+      :id,
       :title,
       :description,
       :status,

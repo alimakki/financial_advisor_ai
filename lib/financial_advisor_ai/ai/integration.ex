@@ -1,6 +1,5 @@
 defmodule FinancialAdvisorAi.AI.Integration do
-  use Ecto.Schema
-  import Ecto.Changeset
+  use FinancialAdvisorAi, :db_schema
 
   schema "integrations" do
     field :provider, :string
@@ -12,12 +11,13 @@ defmodule FinancialAdvisorAi.AI.Integration do
 
     belongs_to :user, FinancialAdvisorAi.Accounts.User
 
-    timestamps(type: :utc_datetime)
+    timestamps()
   end
 
   def changeset(integration, attrs) do
     integration
     |> cast(attrs, [
+      :id,
       :provider,
       :access_token,
       :refresh_token,

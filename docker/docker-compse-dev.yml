@@ -1,0 +1,17 @@
+services:
+  postgres:
+    image: postgres:17.5-alpine
+    ports:
+      - '5432:5432' # postges port
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_DB=financial_advisor_ai
+      - POSTGRES_PASSWORD=postgres
+      - PGDATA=/var/lib/postgresql/pgdata
+    volumes:
+      - ~/.jump/pg17:/var/lib/postgresql/pgdata
+      - ./init:/docker-entrypoint-initdb.d
+    command:
+      - "postgres"
+      - "-c"
+      - "wal_level=logical"

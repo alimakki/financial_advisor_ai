@@ -1,6 +1,5 @@
 defmodule FinancialAdvisorAi.AI.OngoingInstruction do
-  use Ecto.Schema
-  import Ecto.Changeset
+  use FinancialAdvisorAi, :db_schema
 
   schema "ongoing_instructions" do
     field :instruction, :string
@@ -10,12 +9,12 @@ defmodule FinancialAdvisorAi.AI.OngoingInstruction do
 
     belongs_to :user, FinancialAdvisorAi.Accounts.User
 
-    timestamps(type: :utc_datetime)
+    timestamps()
   end
 
   def changeset(instruction, attrs) do
     instruction
-    |> cast(attrs, [:instruction, :is_active, :trigger_events, :priority, :user_id])
+    |> cast(attrs, [:id, :instruction, :is_active, :trigger_events, :priority, :user_id])
     |> validate_required([:instruction, :user_id])
     |> validate_number(:priority, greater_than: 0)
   end

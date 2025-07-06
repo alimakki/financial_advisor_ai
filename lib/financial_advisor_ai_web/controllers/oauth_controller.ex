@@ -1,8 +1,7 @@
 defmodule FinancialAdvisorAiWeb.OauthController do
   use FinancialAdvisorAiWeb, :controller
 
-  alias FinancialAdvisorAi.AI
-  alias FinancialAdvisorAi.Accounts.User
+  alias FinancialAdvisorAi.{AI, Repo}
 
   @doc """
   Initiates OAuth flow for Google (Gmail + Calendar)
@@ -17,32 +16,53 @@ defmodule FinancialAdvisorAiWeb.OauthController do
   def google_callback(conn, %{"code" => code}) do
     case exchange_google_code_for_tokens(code) do
       {:ok, tokens} ->
-        user_id = conn.assigns.current_scope.user.id
+        # Fetch user info from Google
+        case fetch_google_user_info(tokens["access_token"]) do
+          {:ok, user_info} ->
+            # Find or create user in DB
+            case FinancialAdvisorAi.Accounts.get_or_create_user_from_google(user_info) do
+              {:ok, user} ->
+                integration_attrs =
+                  %{
+                    user_id: user.id,
+                    provider: "google",
+                    access_token: tokens["access_token"],
+                    refresh_token: tokens["refresh_token"],
+                    expires_at: calculate_expires_at(tokens["expires_in"]),
+                    scope: tokens["scope"],
+                    metadata: %{
+                      token_type: tokens["token_type"]
+                    }
+                  }
 
-        integration_attrs = %{
-          user_id: user_id,
-          provider: "google",
-          access_token: tokens["access_token"],
-          refresh_token: tokens["refresh_token"],
-          expires_at: calculate_expires_at(tokens["expires_in"]),
-          scope: tokens["scope"],
-          metadata: %{
-            token_type: tokens["token_type"]
-          }
-        }
+                case AI.upsert_integration(integration_attrs) do
+                  {:ok, _integration} ->
+                    FinancialAdvisorAiWeb.UserAuth.log_in_user(
+                      conn,
+                      user,
+                      %{}
+                    )
+                    |> put_flash(
+                      :info,
+                      "Successfully connected to Google! Gmail and Calendar access enabled."
+                    )
+                    |> redirect(to: ~p"/")
 
-        case AI.upsert_integration(integration_attrs) do
-          {:ok, _integration} ->
+                  {:error, _changeset} ->
+                    conn
+                    |> put_flash(:error, "Failed to save Google integration. Please try again.")
+                    |> redirect(to: ~p"/")
+                end
+
+              {:error, reason} ->
+                conn
+                |> put_flash(:error, "Failed to create or find user: #{inspect(reason)}")
+                |> redirect(to: ~p"/")
+            end
+
+          {:error, reason} ->
             conn
-            |> put_flash(
-              :info,
-              "Successfully connected to Google! Gmail and Calendar access enabled."
-            )
-            |> redirect(to: ~p"/")
-
-          {:error, _changeset} ->
-            conn
-            |> put_flash(:error, "Failed to save Google integration. Please try again.")
+            |> put_flash(:error, "Failed to fetch Google user info: #{inspect(reason)}")
             |> redirect(to: ~p"/")
         end
 
@@ -89,7 +109,11 @@ defmodule FinancialAdvisorAiWeb.OauthController do
 
         case AI.upsert_integration(integration_attrs) do
           {:ok, _integration} ->
-            conn
+            FinancialAdvisorAiWeb.UserAuth.log_in_user(
+              conn,
+              conn.assigns.current_scope.user,
+              %{}
+            )
             |> put_flash(:info, "Successfully connected to HubSpot! CRM access enabled.")
             |> redirect(to: ~p"/")
 
@@ -217,6 +241,16 @@ defmodule FinancialAdvisorAiWeb.OauthController do
     case Application.get_env(:financial_advisor_ai, :environment) do
       :prod -> System.get_env("BASE_URL", "https://your-app.fly.dev")
       _ -> "http://localhost:4000"
+    end
+  end
+
+  defp fetch_google_user_info(access_token) do
+    headers = [{"Authorization", "Bearer #{access_token}"}]
+
+    case Req.get("https://www.googleapis.com/oauth2/v2/userinfo", headers: headers) do
+      {:ok, %{status: 200, body: body}} -> {:ok, body}
+      {:ok, %{status: status, body: body}} -> {:error, {status, body}}
+      {:error, error} -> {:error, error}
     end
   end
 end

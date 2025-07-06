@@ -1,5 +1,5 @@
 defmodule FinancialAdvisorAi.Accounts.UserToken do
-  use Ecto.Schema
+  use FinancialAdvisorAi, :db_schema
   import Ecto.Query
   alias FinancialAdvisorAi.Accounts.UserToken
 
@@ -19,7 +19,7 @@ defmodule FinancialAdvisorAi.Accounts.UserToken do
     field :authenticated_at, :utc_datetime
     belongs_to :user, FinancialAdvisorAi.Accounts.User
 
-    timestamps(type: :utc_datetime, updated_at: false)
+    timestamps(updated_at: false)
   end
 
   @doc """

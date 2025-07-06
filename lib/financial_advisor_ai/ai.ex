@@ -104,6 +104,8 @@ defmodule FinancialAdvisorAi.AI do
 
   # Integrations
 
+  def get_integration(user_id, provider) when is_nil(user_id) or is_nil(provider), do: nil
+
   def get_integration(user_id, provider) do
     Integration
     |> where([i], i.user_id == ^user_id and i.provider == ^provider)
@@ -111,16 +113,19 @@ defmodule FinancialAdvisorAi.AI do
   end
 
   def upsert_integration(attrs) do
-    case get_integration(attrs.user_id, attrs.provider) do
+    case get_integration(attrs.user_id, attrs.provider)
+         |> IO.inspect(label: "existing integration") do
       nil ->
         %Integration{}
         |> Integration.changeset(attrs)
         |> Repo.insert()
+        |> IO.inspect(label: "inserting integration")
 
       existing ->
         existing
         |> Integration.changeset(attrs)
         |> Repo.update()
+        |> IO.inspect(label: "updating integration")
     end
   end
 

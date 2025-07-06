@@ -1,6 +1,5 @@
 defmodule FinancialAdvisorAi.Accounts.User do
-  use Ecto.Schema
-  import Ecto.Changeset
+  use FinancialAdvisorAi, :db_schema
 
   schema "users" do
     field :email, :string
@@ -9,7 +8,7 @@ defmodule FinancialAdvisorAi.Accounts.User do
     field :confirmed_at, :utc_datetime
     field :authenticated_at, :utc_datetime, virtual: true
 
-    timestamps(type: :utc_datetime)
+    timestamps()
   end
 
   @doc """
@@ -25,7 +24,7 @@ defmodule FinancialAdvisorAi.Accounts.User do
   """
   def email_changeset(user, attrs, opts \\ []) do
     user
-    |> cast(attrs, [:email])
+    |> cast(attrs, [:id, :email])
     |> validate_email(opts)
   end
 

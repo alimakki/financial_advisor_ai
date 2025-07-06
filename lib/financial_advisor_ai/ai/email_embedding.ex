@@ -7,12 +7,13 @@ defmodule FinancialAdvisorAi.AI.EmailEmbedding do
     field :content, :string
     field :sender, :string
     field :recipient, :string
-    field :embedding, :binary
+    field :date, :utc_datetime
+    field :embedding, Pgvector.Ecto.Vector
     field :metadata, :map, default: %{}
 
     belongs_to :user, FinancialAdvisorAi.Accounts.User
 
-    timestamps(type: :utc_datetime)
+    timestamps()
   end
 
   def changeset(email_embedding, attrs) do
@@ -26,7 +27,8 @@ defmodule FinancialAdvisorAi.AI.EmailEmbedding do
       :recipient,
       :embedding,
       :metadata,
-      :user_id
+      :user_id,
+      :date
     ])
     |> validate_required([:email_id, :user_id])
   end

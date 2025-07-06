@@ -79,3 +79,20 @@ if (process.env.NODE_ENV === "development") {
   })
 }
 
+// LiveView hook for autoscrolling chat to bottom
+let ChatAutoScroll = {
+  mounted() {
+    this.scrollToBottom();
+  },
+  updated() {
+    this.scrollToBottom();
+  },
+  scrollToBottom() {
+    // scroll the container to the bottom
+    this.el.scrollTop = this.el.scrollHeight;
+  }
+};
+
+// Register the hook
+liveSocket.hooks.ChatAutoScroll = ChatAutoScroll;
+

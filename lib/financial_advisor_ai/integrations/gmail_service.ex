@@ -4,7 +4,6 @@ defmodule FinancialAdvisorAi.Integrations.GmailService do
   """
 
   alias FinancialAdvisorAi.AI
-  alias FinancialAdvisorAi.AI.Integration
 
   @gmail_base_url "https://gmail.googleapis.com/gmail/v1"
 
@@ -17,9 +16,8 @@ defmodule FinancialAdvisorAi.Integrations.GmailService do
     end
   end
 
-  def get_message(user_id, message_id) do
-    with {:ok, integration} <- get_gmail_integration(user_id),
-         {:ok, response} <- make_gmail_request(integration, "/users/me/messages/#{message_id}") do
+  def get_message(integration, message_id) do
+    with {:ok, response} <- make_gmail_request(integration, "/users/me/messages/#{message_id}") do
       {:ok, parse_message(response)}
     else
       error -> error
@@ -45,14 +43,15 @@ defmodule FinancialAdvisorAi.Integrations.GmailService do
     # Store email embedding for RAG
     AI.create_email_embedding(%{
       user_id: user_id,
-      email_id: email_data["id"],
-      subject: email_data["subject"],
+      email_id: email_data[:id],
+      subject: email_data[:subject],
       content: content,
       sender: sender,
+      date: email_data[:date],
       recipient: extract_recipient(email_data),
       metadata: %{
-        thread_id: email_data["threadId"],
-        labels: email_data["labelIds"] || []
+        thread_id: email_data[:thread_id],
+        labels: email_data[:labels] || []
       }
     })
   end
@@ -64,7 +63,7 @@ defmodule FinancialAdvisorAi.Integrations.GmailService do
 
       detailed_messages =
         Enum.map(messages, fn msg ->
-          case get_message(user_id, msg["id"]) do
+          case get_message(integration, msg["id"]) do
             {:ok, detailed} -> detailed
             _ -> nil
           end
@@ -78,12 +77,55 @@ defmodule FinancialAdvisorAi.Integrations.GmailService do
   end
 
   @doc """
-  Polls for new Gmail messages for the given user_id.
-  Returns a list of new message events (raw data).
+  Polls for new Gmail messages for the given user_id, imports them into the email_embeddings table, and updates the last seen message ID in the integration metadata.
   """
-  def poll_new_messages(user_id) do
-    # TODO: Track last seen message, fetch new ones, return as events
-    {:ok, []}
+  def poll_and_import_new_messages(user_id) do
+    with {:ok, integration} <- get_gmail_integration(user_id),
+         last_seen_id <- Map.get(integration.metadata || %{}, "last_seen_gmail_id"),
+         {:ok, messages} <- list_messages(user_id, %{maxResults: 50}) do
+      new_messages =
+        case last_seen_id do
+          # First import: treat all as new (could limit to N)
+          nil ->
+            messages
+
+          _ ->
+            # Only messages more recent than last_seen_id
+            Enum.take_while(messages, fn msg -> msg["id"] != last_seen_id end)
+        end
+
+      # Process in reverse order (oldest first)
+      new_messages = Enum.reverse(new_messages)
+
+      Enum.each(new_messages, fn msg ->
+        case get_message(integration, msg["id"]) do
+          {:ok, email_data} ->
+            # Store embedding for RAG
+            create_contact_from_email(user_id, email_data)
+
+          _ ->
+            :noop
+        end
+      end)
+
+      # Update last_seen_gmail_id in integration metadata if we processed any new messages
+      if new_messages != [] do
+        new_metadata =
+          Map.put(
+            integration.metadata || %{},
+            "last_seen_gmail_id",
+            List.last(new_messages)["id"]
+          )
+
+        integration
+        |> Ecto.Changeset.change(metadata: new_metadata)
+        |> FinancialAdvisorAi.Repo.update()
+      else
+        :ok
+      end
+    else
+      error -> error
+    end
   end
 
   defp get_gmail_integration(user_id) do
@@ -125,7 +167,7 @@ defmodule FinancialAdvisorAi.Integrations.GmailService do
     {:error, error}
   end
 
-  defp parse_message(response) do
+  def parse_message(response) do
     payload = response["payload"] || %{}
     headers = payload["headers"] || []
 
@@ -135,7 +177,7 @@ defmodule FinancialAdvisorAi.Integrations.GmailService do
       subject: get_header(headers, "Subject"),
       from: get_header(headers, "From"),
       to: get_header(headers, "To"),
-      date: get_header(headers, "Date"),
+      date: response["internalDate"] |> String.to_integer() |> DateTime.from_unix!(:millisecond),
       body: extract_body(payload),
       labels: response["labelIds"] || []
     }
@@ -150,7 +192,7 @@ defmodule FinancialAdvisorAi.Integrations.GmailService do
 
   defp extract_body(payload) do
     cond do
-      payload["body"]["data"] -> Base.decode64!(payload["body"]["data"])
+      payload["body"]["data"] -> Base.url_decode64!(payload["body"]["data"])
       payload["parts"] -> extract_body_from_parts(payload["parts"])
       true -> ""
     end
@@ -159,7 +201,7 @@ defmodule FinancialAdvisorAi.Integrations.GmailService do
   defp extract_body_from_parts(parts) do
     Enum.find_value(parts, "", fn part ->
       if part["mimeType"] == "text/plain" and part["body"]["data"] do
-        Base.decode64!(part["body"]["data"])
+        Base.url_decode64!(part["body"]["data"])
       end
     end)
   end
@@ -177,26 +219,41 @@ defmodule FinancialAdvisorAi.Integrations.GmailService do
   end
 
   defp extract_sender(email_data) do
-    email_data["from"] ||
-      email_data["payload"]["headers"]
-      |> Enum.find(fn h -> h["name"] == "From" end)
-      |> case do
-        %{"value" => value} -> value
-        _ -> "unknown"
-      end
+    email_data[:from]
+    |> extract_email_address()
+    |> case do
+      nil -> "unknown"
+      email -> email
+    end
   end
 
   defp extract_content(email_data) do
-    email_data["body"] || extract_body(email_data["payload"] || %{})
+    email_data[:body]
   end
 
   defp extract_recipient(email_data) do
-    email_data["to"] ||
-      email_data["payload"]["headers"]
-      |> Enum.find(fn h -> h["name"] == "To" end)
-      |> case do
-        %{"value" => value} -> value
-        _ -> "unknown"
-      end
+    email_data[:to]
+    |> extract_email_address()
+    |> case do
+      nil -> "unknown"
+      email -> email
+    end
+  end
+
+  defp extract_email_address(nil), do: nil
+
+  defp extract_email_address(str) when is_binary(str) do
+    # Regex to match email inside angle brackets, or just the email if no brackets
+    case Regex.run(~r/<([^>]+)>/, str) do
+      [_, email] ->
+        email
+
+      _ ->
+        # Try to match a plain email
+        case Regex.run(~r/([\w._%+-]+@[\w.-]+\.[A-Za-z]{2,})/, str) do
+          [email | _] -> email
+          _ -> nil
+        end
+    end
   end
 end

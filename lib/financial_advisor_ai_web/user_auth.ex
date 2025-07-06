@@ -263,7 +263,6 @@ defmodule FinancialAdvisorAiWeb.UserAuth do
   Plug for routes that require the user to be authenticated.
   """
   def require_authenticated_user(conn, _opts) do
-    IO.inspect(conn, label: "current_scope")
     if conn.assigns.current_scope && conn.assigns.current_scope.user do
       conn
     else

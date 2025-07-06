@@ -19,7 +19,10 @@ defmodule FinancialAdvisorAi.Repo.Migrations.CreateCoreAiSchemas do
     # Messages table
     create table(:messages, primary_key: false) do
       add :id, :binary_id, primary_key: true
-      add :conversation_id, references(:conversations, on_delete: :delete_all, type: :binary_id), null: false
+
+      add :conversation_id, references(:conversations, on_delete: :delete_all, type: :binary_id),
+        null: false
+
       # "user", "assistant", "system"
       add :role, :string, null: false
       add :content, :text, null: false
@@ -105,8 +108,10 @@ defmodule FinancialAdvisorAi.Repo.Migrations.CreateCoreAiSchemas do
       add :content, :text
       add :sender, :string
       add :recipient, :string
-      # Will store vector embeddings
-      add :embedding, :binary
+      add :date, :utc_datetime
+
+      # Assuming OpenAI's embedding size
+      add :embedding, :vector, size: 1536
       add :metadata, :map, default: %{}
 
       timestamps()
@@ -115,5 +120,7 @@ defmodule FinancialAdvisorAi.Repo.Migrations.CreateCoreAiSchemas do
     create index(:email_embeddings, [:user_id])
     create index(:email_embeddings, [:email_id])
     create index(:email_embeddings, [:sender])
+    # pgvector search
+    create index(:email_embeddings, [:embedding], using: :ivfflat)
   end
 end

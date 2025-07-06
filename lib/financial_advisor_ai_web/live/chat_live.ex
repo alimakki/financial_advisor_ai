@@ -55,9 +55,6 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
     user_id = socket.assigns.current_scope.user.id
     conversation_id = socket.assigns.active_conversation.id
 
-    # Show typing indicator
-    socket = assign(socket, :is_typing, true)
-
     # Create user message
     {:ok, user_message} =
       AI.create_message(%{
@@ -73,6 +70,32 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
       {:new_message, user_message}
     )
 
+    # Immediately clear input and show typing indicator, then process LLM in background
+    send(self(), {:process_llm_response, content, user_id, conversation_id})
+    Process.send_after(self(), :force_rerender, 10)
+
+    {:noreply,
+     socket
+     |> assign(:message_form, to_form(%{"content" => ""}))
+     |> assign(:is_typing, true)}
+  end
+
+  def handle_event("update_message", %{"content" => content}, socket) do
+    {:noreply, assign(socket, :message_form, to_form(%{"content" => content}))}
+  end
+
+  @impl true
+  def handle_event("send_message", _params, socket) do
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:new_message, message}, socket) do
+    {:noreply, stream_insert(socket, :messages, message)}
+  end
+
+  @impl true
+  def handle_info({:process_llm_response, content, user_id, conversation_id}, socket) do
     # Use RAG to search for relevant context
     context = RagService.search_by_question_type(user_id, content)
 
@@ -84,7 +107,6 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
             {:ok, response} -> response
             _ -> generate_fallback_response(content, context)
           end
-
         true ->
           case LlmService.generate_response(content, context) do
             {:ok, response} -> response
@@ -105,19 +127,12 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
       {:new_message, ai_message}
     )
 
-    {:noreply,
-     socket
-     |> assign(:message_form, to_form(%{"content" => ""}))
-     |> assign(:is_typing, false)}
-  end
-
-  def handle_event("send_message", _params, socket) do
-    {:noreply, socket}
+    {:noreply, assign(socket, :is_typing, false)}
   end
 
   @impl true
-  def handle_info({:new_message, message}, socket) do
-    {:noreply, stream_insert(socket, :messages, message)}
+  def handle_info(:force_rerender, socket) do
+    {:noreply, socket}
   end
 
   # Check if the user message contains action keywords that would benefit from tool calling
@@ -368,7 +383,7 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
             </div>
           </div>
           <!-- Messages -->
-          <div class="chat-messages p-6 space-y-6" id="messages" phx-update="stream">
+          <div class="chat-messages p-6 space-y-6" id="messages" phx-update="stream" phx-hook="ChatAutoScroll">
             <%= for {id, message} <- @streams.messages do %>
               <div
                 id={id}
@@ -439,6 +454,7 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
             <.form
               for={@message_form}
               phx-submit="send_message"
+              phx-change="update_message"
               id="message-form"
               class="flex space-x-3"
             >
@@ -446,6 +462,7 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
                 <.input
                   field={@message_form[:content]}
                   type="text"
+                  key={@message_form[:content].value}
                   placeholder="Ask me about clients, schedule meetings, or give me tasks..."
                   class="w-full border border-gray-300 rounded-xl px-4 py-3 pr-12 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 placeholder-gray-500 bg-white shadow-sm transition-all duration-200"
                   autocomplete="off"

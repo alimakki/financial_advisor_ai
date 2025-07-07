@@ -302,17 +302,22 @@ defmodule FinancialAdvisorAi.Integrations.GmailService do
 
   defp strip_html_tags(content) when is_binary(content) do
     content
-    |> String.replace(~r/<[^>]*>/, " ")  # Remove HTML tags
-    |> String.replace(~r/&[a-zA-Z0-9#]+;/, " ")  # Remove HTML entities
-    |> String.replace(~r/\s+/, " ")  # Normalize whitespace
+    # Remove HTML tags
+    |> String.replace(~r/<[^>]*>/, " ")
+    # Remove HTML entities
+    |> String.replace(~r/&[a-zA-Z0-9#]+;/, " ")
+    # Normalize whitespace
+    |> String.replace(~r/\s+/, " ")
   end
 
   defp strip_html_tags(content), do: content
 
   defp normalize_whitespace(content) when is_binary(content) do
     content
-    |> String.replace(~r/\s+/, " ")  # Replace multiple whitespace with single space
-    |> String.replace(~r/\n\s*\n/, "\n")  # Replace multiple newlines with single newline
+    # Replace multiple whitespace with single space
+    |> String.replace(~r/\s+/, " ")
+    # Replace multiple newlines with single newline
+    |> String.replace(~r/\n\s*\n/, "\n")
     |> String.trim()
   end
 
@@ -326,7 +331,9 @@ defmodule FinancialAdvisorAi.Integrations.GmailService do
       truncated = String.slice(content, 0, @max_embedding_chars)
 
       case String.split(truncated, " ") do
-        [] -> truncated
+        [] ->
+          truncated
+
         words ->
           # Remove the last word if it might be cut off
           words

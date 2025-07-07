@@ -20,6 +20,8 @@ if System.get_env("PHX_SERVER") do
   config :financial_advisor_ai, FinancialAdvisorAiWeb.Endpoint, server: true
 end
 
+config :langchain, openai_key: System.fetch_env!("OPENAI_API_KEY")
+
 config :ueberauth, Ueberauth.Strategy.Google.OAuth,
   client_id: System.get_env("GOOGLE_CLIENT_ID"),
   client_secret: System.get_env("GOOGLE_CLIENT_SECRET")

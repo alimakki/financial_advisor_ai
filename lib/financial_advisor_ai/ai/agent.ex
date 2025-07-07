@@ -127,7 +127,7 @@ defmodule FinancialAdvisorAi.AI.Agent do
   end
 
   @impl GenServer
-  def handle_call({:process_message, message_content, _conversation_id}, _from, state) do
+  def handle_call({:process_message, message_content, conversation_id}, _from, state) do
     Logger.info(
       "Agent processing message for user #{state.user_id}: #{String.slice(message_content, 0, 50)}..."
     )
@@ -155,12 +155,9 @@ defmodule FinancialAdvisorAi.AI.Agent do
       {:reply, {:ok, response}, state}
     else
       # Process as regular message with RAG and tool calling
-      case process_user_message(message_content, state) do
+      case process_user_message(message_content, conversation_id, state) do
         {:ok, response, new_state} ->
           {:reply, {:ok, response}, new_state}
-
-        {:error, error} ->
-          {:reply, {:error, error}, state}
       end
     end
   end
@@ -240,42 +237,39 @@ defmodule FinancialAdvisorAi.AI.Agent do
     Process.send_after(self(), :process_tasks, 30_000)
   end
 
-  defp process_user_message(message_content, state) do
+  defp process_user_message(message_content, conversation_id, state) do
     # Use RAG to get context
     context = RagService.search_by_question_type(state.user_id, message_content)
 
-    # Add agent memory to context
-    enhanced_context = add_agent_memory(context, state)
+    # Fetch conversation history
+    conversation_history = AI.list_messages(conversation_id)
 
-    # Check if this needs tool calling
-    if contains_action_keywords?(message_content) do
-      case LlmService.generate_response_with_tools(
-             message_content,
-             enhanced_context,
-             state.user_id
-           ) do
-        {:ok, response} ->
-          # Update agent memory with conversation
-          memory = update_memory(state.memory, message_content, response)
-          new_state = %{state | memory: memory}
+    # Add agent memory and conversation history to context
+    enhanced_context =
+      context
+      |> add_agent_memory(state)
+      |> add_conversation_history(conversation_history)
 
-          {:ok, response, new_state}
+    # Always use tool calling now since LLM service defaults to it
+    case LlmService.generate_response(
+           message_content,
+           enhanced_context,
+           state.user_id
+         ) do
+      {:ok, response} ->
+        # Update agent memory with conversation
+        memory = update_memory(state.memory, message_content, response)
+        new_state = %{state | memory: memory}
 
-        {:error, reason, _fallback_response} ->
-          {:error, reason}
-      end
-    else
-      case LlmService.generate_response(message_content, enhanced_context) do
-        {:ok, response} ->
-          # Update agent memory
-          memory = update_memory(state.memory, message_content, response)
-          new_state = %{state | memory: memory}
+        {:ok, response, new_state}
 
-          {:ok, response, new_state}
+      {:error, reason, fallback_response} ->
+        # Use fallback response if provided
+        memory = update_memory(state.memory, message_content, fallback_response)
+        new_state = %{state | memory: memory}
 
-        {:error, reason, _fallback_response} ->
-          {:error, reason}
-      end
+        Logger.warning("LLM service error: #{inspect(reason)}, using fallback response")
+        {:ok, fallback_response, new_state}
     end
   end
 
@@ -392,7 +386,7 @@ defmodule FinancialAdvisorAi.AI.Agent do
 
     prompt = build_proactive_prompt(context)
 
-    case LlmService.generate_response_with_tools(
+    case LlmService.generate_response(
            prompt,
            %{emails: [], contacts: []},
            state.user_id
@@ -419,6 +413,7 @@ defmodule FinancialAdvisorAi.AI.Agent do
   defp contains_instruction_keywords?(message) do
     keywords = ["when", "always", "remember to", "ongoing", "instruction", "rule"]
     message_lower = String.downcase(message)
+
     Enum.any?(keywords, &String.contains?(message_lower, &1))
   end
 
@@ -480,23 +475,23 @@ defmodule FinancialAdvisorAi.AI.Agent do
     |> Enum.reject(&is_nil/1)
   end
 
-  defp contains_action_keywords?(message) do
-    keywords = [
-      "schedule",
-      "send email",
-      "create contact",
-      "add contact",
-      "send a message",
-      "book appointment",
-      "set up meeting",
-      "create task",
-      "remind me",
-      "follow up"
-    ]
+  # defp contains_action_keywords?(message) do
+  #   keywords = [
+  #     "schedule",
+  #     "send email",
+  #     "create contact",
+  #     "add contact",
+  #     "send a message",
+  #     "book appointment",
+  #     "set up meeting",
+  #     "create task",
+  #     "remind me",
+  #     "follow up"
+  #   ]
 
-    message_lower = String.downcase(message)
-    Enum.any?(keywords, &String.contains?(message_lower, &1))
-  end
+  #   message_lower = String.downcase(message)
+  #   Enum.any?(keywords, &String.contains?(message_lower, &1))
+  # end
 
   defp add_agent_memory(context, state) do
     # Add recent conversation memory to context
@@ -531,5 +526,27 @@ defmodule FinancialAdvisorAi.AI.Agent do
     If yes, describe what action you should take and use the appropriate tools.
     If no, respond with "No action needed."
     """
+  end
+
+  defp add_conversation_history(context, conversation_history) do
+    # Format conversation history for LLM context
+    # Filter out the current message (last one) and keep recent messages
+    formatted_history =
+      conversation_history
+      # Get most recent first
+      |> Enum.reverse()
+      # Limit to last 20 messages to avoid token limits
+      |> Enum.take(20)
+      # Put back in chronological order
+      |> Enum.reverse()
+      |> Enum.map(fn message ->
+        %{
+          role: message.role,
+          content: message.content,
+          timestamp: message.inserted_at
+        }
+      end)
+
+    Map.put(context, :conversation_history, formatted_history)
   end
 end

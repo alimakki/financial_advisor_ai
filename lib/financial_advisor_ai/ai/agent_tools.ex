@@ -243,12 +243,10 @@ defmodule FinancialAdvisorAi.AI.AgentTools do
     # Process HubSpot event based on instruction
     instruction_text = String.downcase(instruction.instruction)
 
-    cond do
-      String.contains?(instruction_text, ["send", "email", "thank", "you"]) ->
-        send_thank_you_email(event, user_id)
-
-      true ->
-        {:ok, %{type: "hubspot_follow_up", action: "generic", event: event}}
+    if String.contains?(instruction_text, ["send", "email", "thank", "you"]) do
+      send_thank_you_email(event, user_id)
+    else
+      {:ok, %{type: "hubspot_follow_up", action: "generic", event: event}}
     end
   end
 
@@ -314,7 +312,7 @@ defmodule FinancialAdvisorAi.AI.AgentTools do
     Write a helpful, professional response as a financial advisor.
     """
 
-    case LlmService.generate_response(prompt, context) do
+    case LlmService.generate_response_without_tools(prompt, context) do
       {:ok, response} ->
         # Send the email
         reply_subject =

@@ -14,18 +14,23 @@ defmodule FinancialAdvisorAi.AI.LlmService do
 
   @doc """
   Generates an AI response based on user question and RAG context.
+  Now always uses tool calling by default.
   """
-  def generate_response(user_question, rag_context, opts \\ []) do
+  def generate_response(user_question, rag_context, user_id, opts \\ []) do
+    generate_response_with_tools(user_question, rag_context, user_id, opts)
+  end
+
+  @doc """
+  Generates an AI response without tool calling capabilities.
+  Use this for simple responses that don't need tool execution.
+  """
+  def generate_response_without_tools(user_question, rag_context, opts \\ []) do
     model = Keyword.get(opts, :model, @default_model)
 
     system_prompt = build_system_prompt()
-    # build_user_prompt(user_question, rag_context)
-    user_prompt = user_question
 
-    messages = [
-      %{role: "system", content: system_prompt},
-      %{role: "user", content: user_prompt}
-    ]
+    # Build messages with conversation history
+    messages = build_messages_with_history(system_prompt, user_question, rag_context)
 
     case make_openai_request(messages, model) do
       {:ok, %{"choices" => [choice]}} ->
@@ -45,19 +50,15 @@ defmodule FinancialAdvisorAi.AI.LlmService do
     model = Keyword.get(opts, :model, @default_model)
 
     system_prompt = build_system_prompt_with_tools()
-    # build_user_prompt(user_question, rag_context)
-    user_prompt = user_question
 
-    messages = [
-      %{role: "system", content: system_prompt},
-      %{role: "user", content: user_prompt}
-    ]
+    # Build initial messages with conversation history
+    initial_messages = build_messages_with_history(system_prompt, user_question, rag_context)
 
     tools = build_tool_definitions()
 
-    case make_openai_request_with_tools(messages, model, tools) do
+    case make_openai_request_with_tools(initial_messages, model, tools) do
       {:ok, response} ->
-        case parse_tool_response(response, user_id, rag_context) do
+        case parse_tool_response(response, user_id, rag_context, initial_messages) do
           {:ok, content} -> {:ok, strip_think_tags(content)}
           other -> other
         end
@@ -119,54 +120,79 @@ defmodule FinancialAdvisorAi.AI.LlmService do
     """
   end
 
-  # defp build_user_prompt(user_question, rag_context) do
-  #   context_section = build_context_section(rag_context)
+  defp build_messages_with_history(system_prompt, user_question, rag_context) do
+    # Start with system prompt
+    messages = [%{role: "system", content: system_prompt}]
 
-  #   """
-  #   User Question: #{user_question}
+    # Add conversation history if available
+    messages =
+      case Map.get(rag_context, :conversation_history) do
+        nil ->
+          messages
 
-  #   Available Context:
-  #   #{context_section}
+        [] ->
+          messages
 
-  #   Please provide a helpful response based on the available context. If the user is asking you to
-  #   perform an action (like scheduling a meeting, sending an email, etc.), use the appropriate tools
-  #   to complete the task. Always explain what you're doing.
-  #   """
-  # end
+        history ->
+          # Filter out system messages from history and convert to OpenAI format
+          history_messages =
+            history
+            |> Enum.filter(fn msg -> msg.role in ["user", "assistant"] end)
+            |> Enum.map(fn msg ->
+              %{role: msg.role, content: msg.content}
+            end)
 
-  # defp build_context_section(%{emails: emails, contacts: contacts}) do
-  #   cond do
-  #     (emails == [] or is_nil(emails)) and (contacts == [] or is_nil(contacts)) ->
-  #       "No relevant emails or contacts found for this query."
+          messages ++ history_messages
+      end
 
-  #     true ->
-  #       [build_email_context(emails), build_contact_context(contacts)]
-  #       |> Enum.reject(&(&1 == ""))
-  #       |> Enum.join("")
-  #   end
-  # end
+    # Add context information if available
+    messages =
+      case build_context_section(rag_context) do
+        "" ->
+          messages
 
-  # defp build_email_context([]), do: ""
+        context_info ->
+          messages ++ [%{role: "system", content: "Additional context: #{context_info}"}]
+      end
 
-  # defp build_email_context(emails) do
-  #   email_summaries =
-  #     Enum.map_join("\n", emails, fn email ->
-  #       "- From: #{email.sender}\n  Subject: #{email.subject}\n  Preview: #{email.content_preview}"
-  #     end)
+    # Add the current user question
+    messages ++ [%{role: "user", content: user_question}]
+  end
 
-  #   "Relevant Emails:\n#{email_summaries}"
-  # end
+  defp build_context_section(rag_context) do
+    emails = Map.get(rag_context, :emails, [])
+    contacts = Map.get(rag_context, :contacts, [])
 
-  # defp build_contact_context([]), do: ""
+    if (emails == [] or is_nil(emails)) and (contacts == [] or is_nil(contacts)) do
+      ""
+    else
+      [build_email_context(emails), build_contact_context(contacts)]
+      |> Enum.reject(&(&1 == ""))
+      |> Enum.join("\n")
+    end
+  end
 
-  # defp build_contact_context(contacts) do
-  #   contact_summaries =
-  #     Enum.map_join("\n", contacts, fn contact ->
-  #       "- #{contact.name} (#{contact.email}): #{contact.message_count} messages"
-  #     end)
+  defp build_email_context([]), do: ""
 
-  #   "\nRelevant Contacts:\n#{contact_summaries}"
-  # end
+  defp build_email_context(emails) do
+    email_summaries =
+      Enum.map_join(emails, "\n", fn email ->
+        "- From: #{email.sender}\n  Subject: #{email.subject}\n  Preview: #{email.content_preview}"
+      end)
+
+    "Relevant Emails:\n#{email_summaries}"
+  end
+
+  defp build_contact_context([]), do: ""
+
+  defp build_contact_context(contacts) do
+    contact_summaries =
+      Enum.map_join(contacts, "\n", fn contact ->
+        "- #{contact.name} (#{contact.email}): #{contact.message_count} messages"
+      end)
+
+    "\nRelevant Contacts:\n#{contact_summaries}"
+  end
 
   defp openai_api_url do
     System.get_env("OPENAI_BASE_URL") ||
@@ -382,11 +408,43 @@ defmodule FinancialAdvisorAi.AI.LlmService do
             required: ["title", "task_type"]
           }
         }
+      },
+      %{
+        type: "function",
+        function: %{
+          name: "find_calendar_availability",
+          description: "Find available time slots in Google Calendar for scheduling meetings",
+          parameters: %{
+            type: "object",
+            properties: %{
+              duration_minutes: %{
+                type: "integer",
+                description: "Duration of the meeting in minutes",
+                default: 60
+              },
+              preferred_times: %{
+                type: "array",
+                items: %{
+                  type: "string"
+                },
+                description:
+                  "Preferred time ranges in format 'HH:MM-HH:MM' (e.g., ['09:00-12:00', '14:00-17:00'])",
+                default: []
+              },
+              days_ahead: %{
+                type: "integer",
+                description: "Number of days ahead to search for availability",
+                default: 1
+              }
+            },
+            required: []
+          }
+        }
       }
     ]
   end
 
-  defp parse_tool_response(response, user_id, rag_context) do
+  defp parse_tool_response(response, user_id, rag_context, initial_messages) do
     choice = get_in(response, ["choices", Access.at(0)])
     message = get_in(choice, ["message"])
 
@@ -397,10 +455,110 @@ defmodule FinancialAdvisorAi.AI.LlmService do
         {:ok, content || "I apologize, but I couldn't generate a response at this time."}
 
       tool_calls ->
-        # Process tool calls
-        results = execute_tool_calls(tool_calls, user_id)
-        format_tool_results(results, rag_context)
+        # Process tool calls and send results back to LLM
+        execute_tool_calls_and_get_response(
+          tool_calls,
+          user_id,
+          message,
+          rag_context,
+          initial_messages
+        )
     end
+  end
+
+  defp execute_tool_calls_and_get_response(
+         tool_calls,
+         user_id,
+         assistant_message,
+         rag_context,
+         initial_messages
+       ) do
+    # Execute all tool calls
+    tool_results = execute_tool_calls(tool_calls, user_id)
+
+    # Always send results to LLM, even if some tools failed
+    # The LLM can handle the error messages and provide a helpful response
+    send_tool_results_to_llm(
+      assistant_message,
+      tool_calls,
+      tool_results,
+      rag_context,
+      initial_messages
+    )
+  end
+
+  defp send_tool_results_to_llm(
+         assistant_message,
+         tool_calls,
+         tool_results,
+         rag_context,
+         initial_messages
+       ) do
+    # Build the messages array for the follow-up request using the original context
+    messages =
+      initial_messages ++
+        [
+          %{
+            role: "assistant",
+            content: assistant_message["content"],
+            tool_calls: format_tool_calls_for_api(tool_calls)
+          }
+        ]
+
+    # Add tool result messages
+    tool_messages = build_tool_result_messages(tool_calls, tool_results)
+    messages = messages ++ tool_messages
+
+    # Make follow-up request to OpenAI
+    case make_openai_request(messages, @default_model) do
+      {:ok, %{"choices" => [choice]}} ->
+        content = choice["message"]["content"] |> strip_think_tags()
+        {:ok, content || "I apologize, but I couldn't generate a response at this time."}
+
+      {:error, reason} ->
+        Logger.warning("OpenAI follow-up API error: #{inspect(reason)}")
+        # Fall back to formatted tool results
+        format_tool_results(tool_results, rag_context)
+    end
+  end
+
+  defp format_tool_calls_for_api(tool_calls) do
+    Enum.map(tool_calls, fn tool_call ->
+      %{
+        id: tool_call["id"],
+        type: "function",
+        function: %{
+          name: get_in(tool_call, ["function", "name"]),
+          arguments: get_in(tool_call, ["function", "arguments"])
+        }
+      }
+    end)
+  end
+
+  defp build_tool_result_messages(tool_calls, tool_results) do
+    tool_calls
+    |> Enum.zip(tool_results)
+    |> Enum.map(fn {tool_call, {status, result}} ->
+      tool_call_id = tool_call["id"]
+      function_name = get_in(tool_call, ["function", "name"])
+
+      content =
+        case status do
+          :ok -> format_tool_result_for_llm(result)
+          :error -> "Error: #{result}"
+        end
+
+      %{
+        role: "tool",
+        tool_call_id: tool_call_id,
+        name: function_name,
+        content: content
+      }
+    end)
+  end
+
+  defp format_tool_result_for_llm(result) do
+    Jason.encode!(result)
   end
 
   defp execute_tool_calls(tool_calls, user_id) do
@@ -531,6 +689,17 @@ defmodule FinancialAdvisorAi.AI.LlmService do
     end
   end
 
+  defp execute_tool("find_calendar_availability", params, user_id) do
+    case CalendarService.find_free_time(
+           user_id,
+           params["duration_minutes"],
+           params["preferred_times"]
+         ) do
+      {:ok, availability} ->
+        {:ok, %{tool: "find_calendar_availability", availability: availability}}
+    end
+  end
+
   defp execute_tool(unknown_tool, _params, _user_id) do
     {:error, "Unknown tool: #{unknown_tool}"}
   end
@@ -553,7 +722,7 @@ defmodule FinancialAdvisorAi.AI.LlmService do
   defp format_success_result(%{tool: "search_emails", results: results, query: query}) do
     if length(results) > 0 do
       email_summaries =
-        Enum.map_join("\n", results, fn email ->
+        Enum.map_join(results, "\n", fn email ->
           "• #{email.sender}: #{email.subject}"
         end)
 

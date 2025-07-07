@@ -35,7 +35,7 @@ defmodule FinancialAdvisorAiWeb.ConversationLive.Show do
     if connected?(socket) do
       # TODO: This is a hack to get the conversation to update when the user changes the conversation
       :noop
-      #AI.subscribe_conversations(socket.assigns.current_scope)
+      # AI.subscribe_conversations(socket.assigns.current_scope)
     end
 
     {:ok,

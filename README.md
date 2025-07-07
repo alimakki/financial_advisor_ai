@@ -13,7 +13,7 @@ This project includes a Docker Compose file to run a local Postgres database for
 2. Start the Postgres service by running the following command from the project root:
 
    ```bash
-   docker compose -f docker/docker-compse-dev.yml up -d
+   docker compose -f docker/docker-compose-dev.yml up -d
    ```
 
    This will start a Postgres 17.5 instance with the database `financial_advisor_ai`.

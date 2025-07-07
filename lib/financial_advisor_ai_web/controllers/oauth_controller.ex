@@ -115,8 +115,6 @@ defmodule FinancialAdvisorAiWeb.OauthController do
     }
   end
 
-
-
   @doc """
   Initiates OAuth flow for HubSpot
   """

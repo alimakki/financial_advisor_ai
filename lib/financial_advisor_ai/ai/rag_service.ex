@@ -181,7 +181,7 @@ defmodule FinancialAdvisorAi.AI.RagService do
   end
 
   defp search_meeting_mentions(user_id, _query) do
-    #_meeting_keywords = ["meeting", "appointment", "schedule", "calendar", "call", "zoom"]
+    # _meeting_keywords = ["meeting", "appointment", "schedule", "calendar", "call", "zoom"]
 
     results =
       EmailEmbedding

@@ -342,8 +342,8 @@ defmodule FinancialAdvisorAi.AI.AgentTools do
             {:error, reason}
         end
 
-      {:error, reason} ->
-        {:error, reason}
+      {:error, reason, fallback_response} ->
+        {:error, reason, fallback_response}
     end
   end
 

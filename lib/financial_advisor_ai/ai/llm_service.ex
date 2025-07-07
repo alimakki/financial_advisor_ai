@@ -33,7 +33,7 @@ defmodule FinancialAdvisorAi.AI.LlmService do
 
       {:error, reason} ->
         Logger.warning("OpenAI API error: #{inspect(reason)}")
-        {:ok, fallback_response(user_question, rag_context)}
+        {:error, reason, fallback_response(user_question, rag_context)}
     end
   end
 
@@ -63,7 +63,7 @@ defmodule FinancialAdvisorAi.AI.LlmService do
 
       {:error, reason} ->
         Logger.warning("OpenAI API with tools error: #{inspect(reason)}")
-        {:ok, fallback_response(user_question, rag_context)}
+        {:error, reason, fallback_response(user_question, rag_context)}
     end
   end
 

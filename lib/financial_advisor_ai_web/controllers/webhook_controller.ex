@@ -9,7 +9,7 @@ defmodule FinancialAdvisorAiWeb.WebhookController do
   """
   def handle(conn, %{"provider" => provider} = params) do
     case EventProcessor.process_webhook(provider, params, conn.req_headers) do
-      {:ok, _} ->
+      :ok ->
         send_resp(conn, 200, "ok")
 
       {:error, reason} ->

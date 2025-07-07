@@ -261,7 +261,7 @@ defmodule FinancialAdvisorAi.AI.Agent do
 
           {:ok, response, new_state}
 
-        {:error, reason} ->
+        {:error, reason, _fallback_response} ->
           {:error, reason}
       end
     else
@@ -273,7 +273,7 @@ defmodule FinancialAdvisorAi.AI.Agent do
 
           {:ok, response, new_state}
 
-        {:error, reason} ->
+        {:error, reason, _fallback_response} ->
           {:error, reason}
       end
     end
@@ -403,7 +403,7 @@ defmodule FinancialAdvisorAi.AI.Agent do
         # Optionally send notification to user about proactive action
         broadcast_proactive_action(state.user_id, response)
 
-      {:error, reason} ->
+      {:error, reason, _fallback_response} ->
         Logger.warning("Failed to generate proactive response: #{inspect(reason)}")
     end
   end

@@ -69,7 +69,7 @@ defmodule FinancialAdvisorAi.AI.PollingWorker do
          {:ok, hubspot_events} <- HubspotService.poll_new_events(user_id) do
       # Process events for the specific user
       Enum.each(gmail_events, fn event ->
-        EventProceessor.process_event("gmail", event)
+        EventProcessor.process_event("gmail", event)
       end)
 
       Enum.each(calendar_events, fn event ->

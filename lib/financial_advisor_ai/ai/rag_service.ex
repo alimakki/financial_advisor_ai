@@ -5,17 +5,18 @@ defmodule FinancialAdvisorAi.AI.RagService do
   """
 
   alias FinancialAdvisorAi.AI
-  alias FinancialAdvisorAi.AI.EmailEmbedding
+  alias FinancialAdvisorAi.AI.{EmailEmbedding, LlmService}
   alias FinancialAdvisorAi.Repo
   import Ecto.Query
+  import Pgvector.Ecto.Query
 
   @doc """
-  Searches emails and contacts based on a text query.
+  Searches emails and contacts based on a text query using vector similarity.
   Returns relevant context that can be used by the LLM.
   """
   def search_context(user_id, query) do
-    # For now, we'll use basic text search. Later we can upgrade to vector search.
-    email_results = search_emails_by_content(user_id, query)
+    # Use vector search for better semantic matching
+    email_results = search_emails_by_vector(user_id, query)
     contact_results = search_contacts_by_content(user_id, query)
 
     %{
@@ -26,12 +27,82 @@ defmodule FinancialAdvisorAi.AI.RagService do
   end
 
   @doc """
+  Searches for emails using vector similarity (cosine distance).
+  """
+  def search_emails_by_vector(user_id, query, limit \\ 10) do
+    # Generate embedding for the query
+    case LlmService.create_embedding(query) do
+      {:ok, response} ->
+        # Extract the embedding vector from the response
+        query_embedding = get_in(response, ["data", Access.at(0), "embedding"])
+
+        if query_embedding do
+          # Use PostgreSQL's vector similarity search with cosine distance
+          EmailEmbedding
+          |> where([e], e.user_id == ^user_id)
+          |> where([e], not is_nil(e.embedding))
+          |> where([e], cosine_distance(e.embedding, ^query_embedding) < 0.5)
+          |> order_by([e], fragment("? <=> ?", e.embedding, ^query_embedding))
+          |> limit(^limit)
+          |> Repo.all()
+          |> Enum.map(&format_email_result/1)
+        else
+          # Fallback to text search if embedding creation fails
+          search_emails_by_content(user_id, query)
+        end
+
+      {:error, _} ->
+        # Fallback to text search if embedding creation fails
+        search_emails_by_content(user_id, query)
+    end
+  end
+
+  # @doc """
+  # Searches for emails using vector similarity with a threshold.
+  # Only returns emails with similarity above the threshold.
+  # """
+  # def search_emails_by_vector_with_threshold(user_id, query, threshold \\ 0.8, limit \\ 10) do
+  #   case LlmService.create_embedding(query) do
+  #     {:ok, response} ->
+  #       query_embedding = get_in(response, ["data", Access.at(0), "embedding"])
+
+  #       if query_embedding do
+  #         # Use cosine distance with threshold
+  #         EmailEmbedding
+  #         |> where([e], e.user_id == ^user_id)
+  #         |> where([e], not is_nil(e.embedding))
+  #         |> where([e], fragment("1 - (? <=> ?) > ?", e.embedding, ^query_embedding, ^threshold))
+  #         |> order_by([e], fragment("? <=> ?", e.embedding, ^query_embedding))
+  #         |> limit(^limit)
+  #         |> Repo.all()
+  #         |> Enum.map(&format_email_result/1)
+  #       else
+  #         []
+  #       end
+
+  #     {:error, _} ->
+  #       []
+  #   end
+  # end
+
+  @doc """
   Processes and stores email content for RAG search.
+  Now includes embedding generation.
   """
   def process_email_for_rag(user_id, email_data) do
     # Extract key information from email
     content = extract_email_content(email_data)
     keywords = extract_keywords(content)
+
+    # Generate embedding for the email content
+    embedding =
+      case LlmService.create_embedding(content) do
+        {:ok, response} ->
+          get_in(response, ["data", Access.at(0), "embedding"])
+
+        {:error, _} ->
+          nil
+      end
 
     embedding_attrs = %{
       user_id: user_id,
@@ -40,6 +111,7 @@ defmodule FinancialAdvisorAi.AI.RagService do
       content: content,
       sender: email_data["from"] || email_data["sender"] || "",
       recipient: email_data["to"] || email_data["recipient"] || "",
+      embedding: embedding,
       metadata: %{
         keywords: keywords,
         thread_id: email_data["thread_id"],
@@ -54,19 +126,20 @@ defmodule FinancialAdvisorAi.AI.RagService do
 
   @doc """
   Searches for relevant information based on specific question types.
+  Now uses vector search for better semantic matching.
   """
   def search_by_question_type(user_id, question) do
     question_lower = String.downcase(question)
 
     cond do
       contains_family_keywords?(question_lower) ->
-        search_family_mentions(user_id, question_lower)
+        search_family_mentions_vector(user_id, question)
 
       contains_stock_keywords?(question_lower) ->
-        search_stock_mentions(user_id, question_lower)
+        search_stock_mentions_vector(user_id, question)
 
       contains_meeting_keywords?(question_lower) ->
-        search_meeting_mentions(user_id, question_lower)
+        search_meeting_mentions_vector(user_id, question)
 
       true ->
         search_context(user_id, question)
@@ -110,103 +183,44 @@ defmodule FinancialAdvisorAi.AI.RagService do
     |> Repo.all()
   end
 
-  defp search_family_mentions(user_id, _query) do
-    # family_keywords = [
-    #   "kid",
-    #   "child",
-    #   "son",
-    #   "daughter",
-    #   "family",
-    #   "baseball",
-    #   "soccer",
-    #   "school"
-    # ]
+  defp search_family_mentions_vector(user_id, query) do
+    # Use vector search with family-related context
+    family_query = "#{query} family children kids baseball soccer school activities"
 
-    results =
-      EmailEmbedding
-      |> where([e], e.user_id == ^user_id)
-      |> where(
-        [e],
-        fragment(
-          "? LIKE ? OR ? LIKE ? OR ? LIKE ? OR ? LIKE ?",
-          e.content,
-          ^"%kid%",
-          e.content,
-          ^"%child%",
-          e.content,
-          ^"%baseball%",
-          e.content,
-          ^"%family%"
-        )
-      )
-      |> order_by([e], desc: e.inserted_at)
-      |> limit(15)
-      |> Repo.all()
-      |> Enum.map(&format_email_result/1)
+    results = search_emails_by_vector(user_id, family_query, 15)
 
     %{
       emails: results,
       contacts: [],
-      summary: "Found #{length(results)} emails mentioning family-related topics"
+      summary:
+        "Found #{length(results)} emails mentioning family-related topics using semantic search"
     }
   end
 
-  defp search_stock_mentions(user_id, query) do
-    # Extract potential stock symbols (3-4 uppercase letters)
-    stock_symbols = Regex.scan(~r/\b[A-Z]{2,4}\b/, query) |> List.flatten()
+  defp search_stock_mentions_vector(user_id, query) do
+    # Use vector search with investment-related context
+    stock_query = "#{query} stock investment portfolio market trading finance"
 
-    results =
-      EmailEmbedding
-      |> where([e], e.user_id == ^user_id)
-      |> where(
-        [e],
-        fragment(
-          "? LIKE ? OR ? LIKE ANY(?)",
-          e.content,
-          ^"%stock%",
-          e.content,
-          ^Enum.map(stock_symbols, &"%#{&1}%")
-        )
-      )
-      |> order_by([e], desc: e.inserted_at)
-      |> limit(10)
-      |> Repo.all()
-      |> Enum.map(&format_email_result/1)
+    results = search_emails_by_vector(user_id, stock_query, 10)
 
     %{
       emails: results,
       contacts: [],
-      summary: "Found #{length(results)} emails about stocks or investments"
+      summary: "Found #{length(results)} emails about stocks or investments using semantic search"
     }
   end
 
-  defp search_meeting_mentions(user_id, _query) do
-    # _meeting_keywords = ["meeting", "appointment", "schedule", "calendar", "call", "zoom"]
+  defp search_meeting_mentions_vector(user_id, query) do
+    # Use vector search with meeting-related context
+    meeting_query = "#{query} meeting appointment schedule calendar call conference"
 
-    results =
-      EmailEmbedding
-      |> where([e], e.user_id == ^user_id)
-      |> where(
-        [e],
-        fragment(
-          "? LIKE ? OR ? LIKE ? OR ? LIKE ?",
-          e.content,
-          ^"%meeting%",
-          e.content,
-          ^"%appointment%",
-          e.content,
-          ^"%schedule%"
-        )
-      )
-      |> order_by([e], desc: e.inserted_at)
-      |> limit(10)
-      |> Repo.all()
-      |> Enum.map(&format_email_result/1)
+    results = search_emails_by_vector(user_id, meeting_query, 10)
 
     %{
       emails: results,
       contacts: [],
-      summary: "Found #{length(results)} emails about meetings or scheduling"
+      summary:
+        "Found #{length(results)} emails about meetings or scheduling using semantic search"
     }
   end
 

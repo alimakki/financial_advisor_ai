@@ -14,63 +14,85 @@ defmodule FinancialAdvisorAiWeb.OauthController do
   Handles Google OAuth callback
   """
   def google_callback(conn, %{"code" => code}) do
-    case exchange_google_code_for_tokens(code) do
-      {:ok, tokens} ->
-        # Fetch user info from Google
-        case fetch_google_user_info(tokens["access_token"]) do
-          {:ok, user_info} ->
-            # Find or create user in DB
-            case FinancialAdvisorAi.Accounts.get_or_create_user_from_google(user_info) do
-              {:ok, user} ->
-                integration_attrs =
-                  %{
-                    user_id: user.id,
-                    provider: "google",
-                    access_token: tokens["access_token"],
-                    refresh_token: tokens["refresh_token"],
-                    expires_at: calculate_expires_at(tokens["expires_in"]),
-                    scope: tokens["scope"],
-                    metadata: %{
-                      token_type: tokens["token_type"]
-                    }
-                  }
-
-                case AI.upsert_integration(integration_attrs) do
-                  {:ok, _integration} ->
-                    FinancialAdvisorAiWeb.UserAuth.log_in_user(
-                      conn,
-                      user,
-                      %{}
-                    )
-                    |> put_flash(
-                      :info,
-                      "Successfully connected to Google! Gmail and Calendar access enabled."
-                    )
-                    |> redirect(to: ~p"/")
-
-                  {:error, _changeset} ->
-                    conn
-                    |> put_flash(:error, "Failed to save Google integration. Please try again.")
-                    |> redirect(to: ~p"/")
-                end
-
-              {:error, reason} ->
-                conn
-                |> put_flash(:error, "Failed to create or find user: #{inspect(reason)}")
-                |> redirect(to: ~p"/")
-            end
-
-          {:error, reason} ->
-            conn
-            |> put_flash(:error, "Failed to fetch Google user info: #{inspect(reason)}")
-            |> redirect(to: ~p"/")
-        end
-
+    with {:ok, tokens} <- exchange_google_code_for_tokens(code),
+         {:ok, user_info} <- fetch_google_user_info(tokens["access_token"]),
+         {:ok, user} <- FinancialAdvisorAi.Accounts.get_or_create_user_from_google(user_info),
+         integration_attrs <- build_integration_attrs(user, tokens),
+         {:ok, _integration} <- AI.upsert_integration(integration_attrs) do
+      FinancialAdvisorAiWeb.UserAuth.log_in_user(
+        conn,
+        user,
+        %{}
+      )
+      |> put_flash(
+        :info,
+        "Successfully connected to Google! Gmail and Calendar access enabled."
+      )
+      |> redirect(to: ~p"/")
+    else
       {:error, reason} ->
         conn
         |> put_flash(:error, "Google authentication failed: #{inspect(reason)}")
         |> redirect(to: ~p"/")
     end
+
+    # case exchange_google_code_for_tokens(code) do
+    #   {:ok, tokens} ->
+    #     # Fetch user info from Google
+    #     case fetch_google_user_info(tokens["access_token"]) do
+    #       {:ok, user_info} ->
+    #         # Find or create user in DB
+    #         case FinancialAdvisorAi.Accounts.get_or_create_user_from_google(user_info) do
+    #           {:ok, user} ->
+    #             integration_attrs =
+    #               %{
+    #                 user_id: user.id,
+    #                 provider: "google",
+    #                 access_token: tokens["access_token"],
+    #                 refresh_token: tokens["refresh_token"],
+    #                 expires_at: calculate_expires_at(tokens["expires_in"]),
+    #                 scope: tokens["scope"],
+    #                 metadata: %{
+    #                   token_type: tokens["token_type"]
+    #                 }
+    #               }
+
+    #             case AI.upsert_integration(integration_attrs) do
+    #               {:ok, _integration} ->
+    #                 FinancialAdvisorAiWeb.UserAuth.log_in_user(
+    #                   conn,
+    #                   user,
+    #                   %{}
+    #                 )
+    #                 |> put_flash(
+    #                   :info,
+    #                   "Successfully connected to Google! Gmail and Calendar access enabled."
+    #                 )
+    #                 |> redirect(to: ~p"/")
+
+    #               {:error, _changeset} ->
+    #                 conn
+    #                 |> put_flash(:error, "Failed to save Google integration. Please try again.")
+    #                 |> redirect(to: ~p"/")
+    #             end
+
+    #           {:error, reason} ->
+    #             conn
+    #             |> put_flash(:error, "Failed to create or find user: #{inspect(reason)}")
+    #             |> redirect(to: ~p"/")
+    #         end
+
+    #       {:error, reason} ->
+    #         conn
+    #         |> put_flash(:error, "Failed to fetch Google user info: #{inspect(reason)}")
+    #         |> redirect(to: ~p"/")
+    #     end
+
+    #   {:error, reason} ->
+    #     conn
+    #     |> put_flash(:error, "Google authentication failed: #{inspect(reason)}")
+    #     |> redirect(to: ~p"/")
+    # end
   end
 
   def google_callback(conn, %{"error" => error}) do
@@ -78,6 +100,22 @@ defmodule FinancialAdvisorAiWeb.OauthController do
     |> put_flash(:error, "Google authentication was denied: #{error}")
     |> redirect(to: ~p"/")
   end
+
+  defp build_integration_attrs(user, tokens) do
+    %{
+      user_id: user.id,
+      provider: "google",
+      access_token: tokens["access_token"],
+      refresh_token: tokens["refresh_token"],
+      expires_at: calculate_expires_at(tokens["expires_in"]),
+      scope: tokens["scope"],
+      metadata: %{
+        token_type: tokens["token_type"]
+      }
+    }
+  end
+
+
 
   @doc """
   Initiates OAuth flow for HubSpot

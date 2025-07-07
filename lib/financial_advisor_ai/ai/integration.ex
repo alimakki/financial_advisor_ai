@@ -1,4 +1,8 @@
 defmodule FinancialAdvisorAi.AI.Integration do
+  @moduledoc """
+  Integration for the Financial Advisor AI web application.
+  """
+
   use FinancialAdvisorAi, :db_schema
 
   schema "integrations" do

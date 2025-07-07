@@ -101,17 +101,16 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
 
     # Check if this is an action request and use tool calling if appropriate
     ai_response =
-      cond do
-        contains_action_keywords?(content) ->
-          case LlmService.generate_response_with_tools(content, context, user_id) do
-            {:ok, response} -> response
-            _ -> generate_fallback_response(content, context)
-          end
-        true ->
-          case LlmService.generate_response(content, context) do
-            {:ok, response} -> response
-            _ -> generate_fallback_response(content, context)
-          end
+      if contains_action_keywords?(content) do
+        case LlmService.generate_response_with_tools(content, context, user_id) do
+          {:ok, response} -> response
+          _ -> generate_fallback_response(content, context)
+        end
+      else
+        case LlmService.generate_response(content, context) do
+          {:ok, response} -> response
+          _ -> generate_fallback_response(content, context)
+        end
       end
 
     {:ok, ai_message} =
@@ -182,12 +181,11 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
         email_details =
           emails
           |> Enum.with_index(1)
-          |> Enum.map(fn {email, index} ->
+          |> Enum.map_join("\n\n", fn {email, index} ->
             preview = String.slice(email.content_preview, 0, 150)
 
             "**#{index}. #{extract_name(email.sender)}** (#{email.sender})\n   📧 #{email.subject}\n   💬 \"#{preview}...\"\n   📅 #{format_date(email.date)}"
           end)
-          |> Enum.join("\n\n")
 
         "🏟️ **Found #{length(emails)} emails about family activities:**\n\n#{email_details}\n\n💡 **What would you like me to help with?**\n• Draft a response to any of these emails\n• Schedule time around these activities\n• Create a follow-up task\n• Search for more specific details"
     end
@@ -202,12 +200,11 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
         email_details =
           emails
           |> Enum.with_index(1)
-          |> Enum.map(fn {email, index} ->
+          |> Enum.map_join("\n\n", fn {email, index} ->
             preview = String.slice(email.content_preview, 0, 150)
 
             "**#{index}. #{extract_name(email.sender)}** (#{email.sender})\n   📧 #{email.subject}\n   💬 \"#{preview}...\"\n   📅 #{format_date(email.date)}"
           end)
-          |> Enum.join("\n\n")
 
         "💰 **Found #{length(emails)} emails about investments:**\n\n#{email_details}\n\n💡 **What would you like me to help with?**\n• Analyze these investment discussions\n• Draft responses to client questions\n• Schedule follow-up meetings\n• Create investment tracking tasks"
     end
@@ -222,12 +219,11 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
         email_details =
           emails
           |> Enum.with_index(1)
-          |> Enum.map(fn {email, index} ->
+          |> Enum.map_join("\n\n", fn {email, index} ->
             preview = String.slice(email.content_preview, 0, 150)
 
             "**#{index}. #{extract_name(email.sender)}** (#{email.sender})\n   📧 #{email.subject}\n   💬 \"#{preview}...\"\n   📅 #{format_date(email.date)}"
           end)
-          |> Enum.join("\n\n")
 
         "🗓️ **Found #{length(emails)} emails about scheduling:**\n\n#{email_details}\n\n💡 **What would you like me to help with?**\n• Schedule these requested meetings\n• Check your calendar availability\n• Send confirmation emails\n• Create scheduling tasks"
     end
@@ -247,23 +243,18 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
         summary_parts =
           [email_summary, contact_summary] |> Enum.reject(&(&1 == "")) |> Enum.join(" and ")
 
-        email_preview =
-          if length(emails) > 0 do
-            top_emails =
-              emails
-              |> Enum.take(3)
-              |> Enum.map(fn email ->
-                "• #{extract_name(email.sender)}: #{email.subject}"
-              end)
-              |> Enum.join("\n")
-
-            "\n\n📧 **Top Results:**\n#{top_emails}"
-          else
-            ""
-          end
+        email_preview = get_top_emails(emails)
 
         "🔍 **Search Results for:** \"#{question}\"\n\nI found #{summary_parts} that might be relevant.#{email_preview}\n\n💡 **To get more detailed analysis:**\n• Connect your accounts for full AI processing\n• Ask more specific questions\n• Try different search terms\n\n🤖 **I'm here to help with:** client management, scheduling, email analysis, and task automation!"
     end
+  end
+
+  defp get_top_emails(emails) do
+    emails
+    |> Enum.take(3)
+    |> Enum.map_join("\n", fn email ->
+      "• #{extract_name(email.sender)}: #{email.subject}"
+    end)
   end
 
   # Helper functions for better formatting
@@ -272,8 +263,7 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
       [name | _] ->
         name
         |> String.split(".")
-        |> Enum.map(&String.capitalize/1)
-        |> Enum.join(" ")
+        |> Enum.map_join(" ", &String.capitalize/1)
 
       _ ->
         email
@@ -383,7 +373,12 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
             </div>
           </div>
           <!-- Messages -->
-          <div class="chat-messages p-6 space-y-6" id="messages" phx-update="stream" phx-hook="ChatAutoScroll">
+          <div
+            class="chat-messages p-6 space-y-6"
+            id="messages"
+            phx-update="stream"
+            phx-hook="ChatAutoScroll"
+          >
             <%= for {id, message} <- @streams.messages do %>
               <div
                 id={id}
@@ -462,7 +457,6 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
                 <.input
                   field={@message_form[:content]}
                   type="text"
-                  key={@message_form[:content].value}
                   placeholder="Ask me about clients, schedule meetings, or give me tasks..."
                   class="w-full border border-gray-300 rounded-xl px-4 py-3 pr-12 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 placeholder-gray-500 bg-white shadow-sm transition-all duration-200"
                   autocomplete="off"

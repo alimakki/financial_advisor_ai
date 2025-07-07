@@ -170,7 +170,7 @@ defmodule FinancialAdvisorAi.Integrations.HubspotService do
   Polls for new Hubspot contact or note events for the given user_id.
   Returns a list of new event objects (raw data).
   """
-  def poll_new_events(user_id) do
+  def poll_new_events(_user_id) do
     # TODO: Track last seen event, fetch new ones, return as events
     {:ok, []}
   end

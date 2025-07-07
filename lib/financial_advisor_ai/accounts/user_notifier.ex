@@ -1,4 +1,8 @@
 defmodule FinancialAdvisorAi.Accounts.UserNotifier do
+  @moduledoc """
+  User notifier for the Financial Advisor AI web application.
+  """
+
   import Swoosh.Email
 
   alias FinancialAdvisorAi.Mailer

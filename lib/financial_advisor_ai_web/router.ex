@@ -21,6 +21,15 @@ defmodule FinancialAdvisorAiWeb.Router do
     pipe_through :browser
   end
 
+  # Webhook routes
+  scope "/webhooks", FinancialAdvisorAiWeb do
+    pipe_through :api
+
+    post "/gmail", WebhookController, :gmail_webhook
+    post "/calendar", WebhookController, :calendar_webhook
+    post "/hubspot", WebhookController, :hubspot_webhook
+  end
+
   # Other scopes may use custom stacks.
   # scope "/api", FinancialAdvisorAiWeb do
   #   pipe_through :api

@@ -15,6 +15,9 @@ defmodule FinancialAdvisorAi.Application do
       {DNSCluster,
        query: Application.get_env(:financial_advisor_ai, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: FinancialAdvisorAi.PubSub},
+      # AI Agent Registry and Supervisor
+      {Registry, keys: :unique, name: FinancialAdvisorAi.AI.AgentRegistry},
+      FinancialAdvisorAi.AI.AgentSupervisor,
       # Start a worker by calling: FinancialAdvisorAi.Worker.start_link(arg)
       # {FinancialAdvisorAi.Worker, arg},
       # Start to serve requests, typically the last entry

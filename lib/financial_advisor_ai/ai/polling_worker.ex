@@ -5,7 +5,9 @@ defmodule FinancialAdvisorAi.AI.PollingWorker do
   """
   use GenServer
 
-  alias FinancialAdvisorAi.Accounts
+  alias FinancialAdvisorAi.{Accounts, Repo}
+
+  require Logger
 
   alias FinancialAdvisorAi.Integrations.{
     GmailService,
@@ -41,16 +43,21 @@ defmodule FinancialAdvisorAi.AI.PollingWorker do
   Polls all users for new events in Gmail, Calendar, and Hubspot.
   """
   def poll_all_users do
-    for user <- Accounts.list_users() do
-      # Only enqueue for users with a Google integration
-      case FinancialAdvisorAi.AI.get_integration(user.id, "google") do
-        nil ->
-          :noop
+    Repo.checkout(fn ->
+      users = Accounts.list_users()
+      Logger.info("Polling all users for new events, count: #{length(users)}")
 
-        _integration ->
-          Oban.insert(FinancialAdvisorAi.AI.GmailPollJob.new(%{"user_id" => user.id}))
+      for user <- users do
+        # Only enqueue for users with a Google integration
+        case FinancialAdvisorAi.AI.get_integration(user.id, "google") do
+          nil ->
+            :noop
+
+          _integration ->
+            Oban.insert(FinancialAdvisorAi.AI.GmailPollJob.new(%{"user_id" => user.id}))
+        end
       end
-    end
+    end)
   end
 
   @doc """
@@ -60,9 +67,18 @@ defmodule FinancialAdvisorAi.AI.PollingWorker do
     with {:ok, gmail_events} <- GmailService.poll_and_import_new_messages(user_id),
          {:ok, calendar_events} <- CalendarService.poll_new_events(user_id),
          {:ok, hubspot_events} <- HubspotService.poll_new_events(user_id) do
-      Enum.each(gmail_events, &EventProcessor.process_event("gmail", &1))
-      Enum.each(calendar_events, &EventProcessor.process_event("calendar", &1))
-      Enum.each(hubspot_events, &EventProcessor.process_event("hubspot", &1))
+      # Process events for the specific user
+      Enum.each(gmail_events, fn event ->
+        EventProceessor.process_event("gmail", event)
+      end)
+
+      Enum.each(calendar_events, fn event ->
+        EventProcessor.process_event("calendar", event)
+      end)
+
+      Enum.each(hubspot_events, fn event ->
+        EventProcessor.process_event("hubspot", event)
+      end)
     end
   end
 end

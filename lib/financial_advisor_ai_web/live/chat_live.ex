@@ -1,15 +1,23 @@
 defmodule FinancialAdvisorAiWeb.ChatLive do
   use FinancialAdvisorAiWeb, :live_view
 
+  require Logger
   alias FinancialAdvisorAi.AI
-  alias FinancialAdvisorAi.AI.{RagService, LlmService}
 
   @impl true
   def mount(_params, _session, socket) do
     if connected?(socket) do
+      user_id = socket.assigns.current_scope.user.id
+
       Phoenix.PubSub.subscribe(
         FinancialAdvisorAi.PubSub,
-        "chat:#{socket.assigns.current_scope.user.id}"
+        "chat:#{user_id}"
+      )
+
+      # Subscribe to agent proactive actions
+      Phoenix.PubSub.subscribe(
+        FinancialAdvisorAi.PubSub,
+        "agent:#{user_id}"
       )
     end
 
@@ -95,22 +103,39 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
   end
 
   @impl true
-  def handle_info({:process_llm_response, content, user_id, conversation_id}, socket) do
-    # Use RAG to search for relevant context
-    context = RagService.search_by_question_type(user_id, content)
+  def handle_info({:proactive_action, action}, socket) do
+    # Handle proactive agent actions
+    Logger.info("Agent proactive action: #{String.slice(action, 0, 100)}...")
 
-    # Check if this is an action request and use tool calling if appropriate
+    # Create a system message to show the proactive action
+    {:ok, system_message} =
+      AI.create_message(%{
+        conversation_id: socket.assigns.active_conversation.id,
+        role: "assistant",
+        content: "🤖 **Proactive Action**: #{action}"
+      })
+
+    # Broadcast the system message
+    Phoenix.PubSub.broadcast(
+      FinancialAdvisorAi.PubSub,
+      "chat:#{socket.assigns.current_scope.user.id}",
+      {:new_message, system_message}
+    )
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:process_llm_response, content, user_id, conversation_id}, socket) do
+    # Use the Agent system to process the message
     ai_response =
-      if contains_action_keywords?(content) do
-        case LlmService.generate_response_with_tools(content, context, user_id) do
-          {:ok, response} -> response
-          _ -> generate_fallback_response(content, context)
-        end
-      else
-        case LlmService.generate_response(content, context) do
-          {:ok, response} -> response
-          _ -> generate_fallback_response(content, context)
-        end
+      case FinancialAdvisorAi.AI.Agent.process_message(user_id, content, conversation_id) do
+        {:ok, response} ->
+          response
+
+        {:error, reason} ->
+          Logger.error("Agent failed to process message: #{inspect(reason)}")
+          generate_fallback_response(content, %{emails: [], contacts: []})
       end
 
     {:ok, ai_message} =
@@ -132,25 +157,6 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
   @impl true
   def handle_info(:force_rerender, socket) do
     {:noreply, socket}
-  end
-
-  # Check if the user message contains action keywords that would benefit from tool calling
-  defp contains_action_keywords?(content) do
-    action_keywords = [
-      "schedule",
-      "send email",
-      "create contact",
-      "add contact",
-      "send a message",
-      "book appointment",
-      "set up meeting",
-      "create task",
-      "remind me",
-      "follow up"
-    ]
-
-    content_lower = String.downcase(content)
-    Enum.any?(action_keywords, &String.contains?(content_lower, &1))
   end
 
   # Enhanced fallback response when LLM service is unavailable

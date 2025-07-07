@@ -33,13 +33,15 @@ defmodule FinancialAdvisorAiWeb.ConversationLive.Show do
   @impl true
   def mount(%{"id" => id}, _session, socket) do
     if connected?(socket) do
-      AI.subscribe_conversations(socket.assigns.current_scope)
+      # TODO: This is a hack to get the conversation to update when the user changes the conversation
+      :noop
+      #AI.subscribe_conversations(socket.assigns.current_scope)
     end
 
     {:ok,
      socket
      |> assign(:page_title, "Show Conversation")
-     |> assign(:conversation, AI.get_conversation!(socket.assigns.current_scope, id))}
+     |> assign(:conversation, AI.get_conversation!(id))}
   end
 
   @impl true

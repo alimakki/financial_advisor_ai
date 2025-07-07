@@ -1,4 +1,8 @@
 defmodule FinancialAdvisorAi.AI.Task do
+  @moduledoc """
+  Task for the Financial Advisor AI web application.
+  """
+
   use FinancialAdvisorAi, :db_schema
 
   schema "tasks" do

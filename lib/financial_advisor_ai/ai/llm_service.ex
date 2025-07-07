@@ -5,7 +5,7 @@ defmodule FinancialAdvisorAi.AI.LlmService do
   """
 
   require Logger
-  alias FinancialAdvisorAi.Repo
+  # alias FinancialAdvisorAi.Repo
   alias FinancialAdvisorAi.Integrations.CalendarService
 
   # @openai_api_url "https://api.openai.com/v1"
@@ -118,51 +118,54 @@ defmodule FinancialAdvisorAi.AI.LlmService do
     """
   end
 
-  defp build_user_prompt(user_question, rag_context) do
-    context_section =
-      case {rag_context.emails, rag_context.contacts} do
-        {[], []} ->
-          "No relevant emails or contacts found for this query."
+  # defp build_user_prompt(user_question, rag_context) do
+  #   context_section = build_context_section(rag_context)
 
-        {emails, contacts} ->
-          email_context =
-            if length(emails) > 0 do
-              email_summaries =
-                Enum.map_join("\n", emails, fn email ->
-                  "- From: #{email.sender}\n  Subject: #{email.subject}\n  Preview: #{email.content_preview}"
-                end)
+  #   """
+  #   User Question: #{user_question}
 
-              "Relevant Emails:\n#{email_summaries}"
-            else
-              ""
-            end
+  #   Available Context:
+  #   #{context_section}
 
-          contact_context =
-            if length(contacts) > 0 do
-              contact_summaries =
-                Enum.map_join("\n", contacts, fn contact ->
-                  "- #{contact.name} (#{contact.email}): #{contact.message_count} messages"
-                end)
+  #   Please provide a helpful response based on the available context. If the user is asking you to
+  #   perform an action (like scheduling a meeting, sending an email, etc.), use the appropriate tools
+  #   to complete the task. Always explain what you're doing.
+  #   """
+  # end
 
-              "\nRelevant Contacts:\n#{contact_summaries}"
-            else
-              ""
-            end
+  # defp build_context_section(%{emails: emails, contacts: contacts}) do
+  #   cond do
+  #     (emails == [] or is_nil(emails)) and (contacts == [] or is_nil(contacts)) ->
+  #       "No relevant emails or contacts found for this query."
 
-          email_context <> contact_context
-      end
+  #     true ->
+  #       [build_email_context(emails), build_contact_context(contacts)]
+  #       |> Enum.reject(&(&1 == ""))
+  #       |> Enum.join("")
+  #   end
+  # end
 
-    """
-    User Question: #{user_question}
+  # defp build_email_context([]), do: ""
 
-    Available Context:
-    #{context_section}
+  # defp build_email_context(emails) do
+  #   email_summaries =
+  #     Enum.map_join("\n", emails, fn email ->
+  #       "- From: #{email.sender}\n  Subject: #{email.subject}\n  Preview: #{email.content_preview}"
+  #     end)
 
-    Please provide a helpful response based on the available context. If the user is asking you to
-    perform an action (like scheduling a meeting, sending an email, etc.), use the appropriate tools
-    to complete the task. Always explain what you're doing.
-    """
-  end
+  #   "Relevant Emails:\n#{email_summaries}"
+  # end
+
+  # defp build_contact_context([]), do: ""
+
+  # defp build_contact_context(contacts) do
+  #   contact_summaries =
+  #     Enum.map_join("\n", contacts, fn contact ->
+  #       "- #{contact.name} (#{contact.email}): #{contact.message_count} messages"
+  #     end)
+
+  #   "\nRelevant Contacts:\n#{contact_summaries}"
+  # end
 
   defp openai_api_url do
     System.get_env("OPENAI_BASE_URL") ||
@@ -535,66 +538,57 @@ defmodule FinancialAdvisorAi.AI.LlmService do
     successful_results = Enum.filter(results, fn {status, _} -> status == :ok end)
     error_results = Enum.filter(results, fn {status, _} -> status == :error end)
 
-    response_parts = []
-
     response_parts =
-      if length(successful_results) > 0 do
-        success_messages =
-          Enum.map(successful_results, fn {:ok, result} ->
-            case result.tool do
-              "search_emails" ->
-                if length(result.results) > 0 do
-                  email_summaries =
-                    Enum.map_join("\n", result.results, fn email ->
-                      "• #{email.sender}: #{email.subject}"
-                    end)
-
-                  "Found #{length(result.results)} emails for '#{result.query}':\n#{email_summaries}"
-                else
-                  "No emails found for '#{result.query}'"
-                end
-
-              "schedule_meeting" ->
-                case result.status do
-                  "scheduled" ->
-                    "✅ Meeting scheduled successfully! Event ID: #{result.event_id}\nTime: #{result.start_time} - #{result.end_time}"
-
-                  "task_created" ->
-                    "✅ Created scheduling task (ID: #{result.task_id}). I'll work on coordinating the meeting."
-                end
-
-              "send_email" ->
-                "✅ Created email task (ID: #{result.task_id}). I'll send the email for you."
-
-              "create_contact" ->
-                "✅ Created contact creation task (ID: #{result.task_id}). I'll add them to your CRM."
-
-              "create_task" ->
-                "✅ Created task (ID: #{result.task_id}) for follow-up."
-            end
-          end)
-
-        response_parts ++ success_messages
-      else
-        response_parts
-      end
-
-    response_parts =
-      if length(error_results) > 0 do
-        error_messages =
-          Enum.map(error_results, fn {:error, message} ->
-            "❌ Error: #{message}"
-          end)
-
-        response_parts ++ error_messages
-      else
-        response_parts
-      end
+      successful_results
+      |> Enum.map(fn {:ok, result} -> format_success_result(result) end)
+      |> Kernel.++(
+        Enum.map(error_results, fn {:error, message} -> format_error_result(message) end)
+      )
 
     final_response = Enum.join(response_parts, "\n\n")
-
     {:ok, final_response}
   end
+
+  defp format_success_result(%{tool: "search_emails", results: results, query: query}) do
+    if length(results) > 0 do
+      email_summaries =
+        Enum.map_join("\n", results, fn email ->
+          "• #{email.sender}: #{email.subject}"
+        end)
+
+      "Found #{length(results)} emails for '#{query}':\n#{email_summaries}"
+    else
+      "No emails found for '#{query}'"
+    end
+  end
+
+  defp format_success_result(%{tool: "schedule_meeting", status: "scheduled"} = result) do
+    "✅ Meeting scheduled successfully! Event ID: #{result.event_id}\nTime: #{result.start_time} - #{result.end_time}"
+  end
+
+  defp format_success_result(%{
+         tool: "schedule_meeting",
+         status: "task_created",
+         task_id: task_id
+       }) do
+    "✅ Created scheduling task (ID: #{task_id}). I'll work on coordinating the meeting."
+  end
+
+  defp format_success_result(%{tool: "send_email", task_id: task_id}) do
+    "✅ Created email task (ID: #{task_id}). I'll send the email for you."
+  end
+
+  defp format_success_result(%{tool: "create_contact", task_id: task_id}) do
+    "✅ Created contact creation task (ID: #{task_id}). I'll add them to your CRM."
+  end
+
+  defp format_success_result(%{tool: "create_task", task_id: task_id}) do
+    "✅ Created task (ID: #{task_id}) for follow-up."
+  end
+
+  defp format_success_result(_), do: ""
+
+  defp format_error_result(message), do: "❌ Error: #{message}"
 
   defp get_api_key do
     System.get_env("OPENAI_API_KEY") ||

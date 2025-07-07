@@ -1,4 +1,8 @@
 defmodule FinancialAdvisorAi.AI.EmailEmbedding do
+  @moduledoc """
+  Email embedding for the Financial Advisor AI web application.
+  """
+
   use FinancialAdvisorAi, :db_schema
 
   schema "email_embeddings" do

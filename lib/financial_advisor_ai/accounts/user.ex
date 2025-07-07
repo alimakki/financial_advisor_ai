@@ -1,4 +1,8 @@
 defmodule FinancialAdvisorAi.Accounts.User do
+  @moduledoc """
+  User for the Financial Advisor AI web application.
+  """
+
   use FinancialAdvisorAi, :db_schema
 
   schema "users" do

@@ -1,4 +1,8 @@
 defmodule FinancialAdvisorAi.Accounts.UserToken do
+  @moduledoc """
+  User token for the Financial Advisor AI web application.
+  """
+
   use FinancialAdvisorAi, :db_schema
   import Ecto.Query
   alias FinancialAdvisorAi.Accounts.UserToken

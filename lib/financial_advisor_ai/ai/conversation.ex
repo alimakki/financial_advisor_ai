@@ -1,4 +1,8 @@
 defmodule FinancialAdvisorAi.AI.Conversation do
+  @moduledoc """
+  Conversation for the Financial Advisor AI web application.
+  """
+
   use FinancialAdvisorAi, :db_schema
 
   schema "conversations" do

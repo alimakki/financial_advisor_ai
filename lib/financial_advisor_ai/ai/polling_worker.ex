@@ -57,7 +57,7 @@ defmodule FinancialAdvisorAi.AI.PollingWorker do
   Polls a single user for new events in all integrations.
   """
   def poll_user(user_id) do
-    with {:ok, gmail_events} <- GmailService.poll_new_messages(user_id),
+    with {:ok, gmail_events} <- GmailService.poll_and_import_new_messages(user_id),
          {:ok, calendar_events} <- CalendarService.poll_new_events(user_id),
          {:ok, hubspot_events} <- HubspotService.poll_new_events(user_id) do
       Enum.each(gmail_events, &EventProcessor.process_event("gmail", &1))

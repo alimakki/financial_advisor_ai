@@ -44,7 +44,9 @@ defmodule FinancialAdvisorAiWeb.ConversationLive.Index do
   @impl true
   def mount(_params, _session, socket) do
     if connected?(socket) do
-      AI.subscribe_conversations(socket.assigns.current_scope)
+      # TODO: This is a hack to get the conversation to update when the user changes the conversation
+      :noop
+      #AI.subscribe_conversations(socket.assigns.current_scope)
     end
 
     {:ok,
@@ -55,8 +57,8 @@ defmodule FinancialAdvisorAiWeb.ConversationLive.Index do
 
   @impl true
   def handle_event("delete", %{"id" => id}, socket) do
-    conversation = AI.get_conversation!(socket.assigns.current_scope, id)
-    {:ok, _} = AI.delete_conversation(socket.assigns.current_scope, conversation)
+    conversation = AI.get_conversation!(id)
+    {:ok, _} = AI.delete_conversation(conversation)
 
     {:noreply, stream_delete(socket, :conversations, conversation)}
   end

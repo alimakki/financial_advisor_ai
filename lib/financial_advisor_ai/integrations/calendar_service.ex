@@ -73,17 +73,19 @@ defmodule FinancialAdvisorAi.Integrations.CalendarService do
     end_time =
       DateTime.utc_now() |> DateTime.add(7 * 24 * 60 * 60, :second) |> DateTime.to_iso8601()
 
-    with {:ok, events} <-
-           list_events(user_id, %{
-             timeMin: start_time,
-             timeMax: end_time,
-             singleEvents: true,
-             orderBy: "startTime"
-           }) do
-      free_slots = calculate_free_slots(events, duration_minutes, preferred_times)
-      {:ok, free_slots}
-    else
-      error -> error
+    list_events(user_id, %{
+      timeMin: start_time,
+      timeMax: end_time,
+      singleEvents: true,
+      orderBy: "startTime"
+    })
+    |> case do
+      {:ok, events} ->
+        free_slots = calculate_free_slots(events, duration_minutes, preferred_times)
+        {:ok, free_slots}
+
+      {:error, _} ->
+        {:error, :no_events}
     end
   end
 
@@ -136,7 +138,7 @@ defmodule FinancialAdvisorAi.Integrations.CalendarService do
   Polls for new Google Calendar events for the given user_id.
   Returns a list of new event objects (raw data).
   """
-  def poll_new_events(user_id) do
+  def poll_new_events(_user_id) do
     # TODO: Track last seen event, fetch new ones, return as events
     {:ok, []}
   end
@@ -200,7 +202,7 @@ defmodule FinancialAdvisorAi.Integrations.CalendarService do
     }
   end
 
-  defp calculate_free_slots(events, duration_minutes, preferred_times) do
+  defp calculate_free_slots(events, duration_minutes, _preferred_times) do
     # Convert events to busy periods
     busy_periods =
       events
@@ -245,30 +247,38 @@ defmodule FinancialAdvisorAi.Integrations.CalendarService do
     |> Enum.flat_map(fn day_offset ->
       day = DateTime.add(now, day_offset * 24 * 60 * 60, :second)
 
-      # Skip weekends
-      if Date.day_of_week(DateTime.to_date(day)) in [6, 7] do
-        []
-      else
-        # Generate hourly slots from 9 AM to 5 PM
-        9..16
-        |> Enum.map(fn hour ->
-          start_time =
-            day
-            |> DateTime.to_date()
-            |> DateTime.new!(Time.new!(hour, 0, 0), "UTC")
-            |> DateTime.to_iso8601()
-
-          end_time =
-            day
-            |> DateTime.to_date()
-            |> DateTime.new!(Time.new!(hour, 0, 0), "UTC")
-            |> DateTime.add(duration_minutes * 60, :second)
-            |> DateTime.to_iso8601()
-
-          {start_time, end_time}
-        end)
-      end
+      generate_day_slots(day, duration_minutes)
     end)
+  end
+
+  defp generate_day_slots(day, duration_minutes) do
+    # Skip weekends
+    if Date.day_of_week(DateTime.to_date(day)) in [6, 7] do
+      []
+    else
+      # Generate hourly slots from 9 AM to 5 PM
+      9..16
+      |> Enum.map(fn hour ->
+        calculate_start_end_times(day, hour, duration_minutes)
+      end)
+    end
+  end
+
+  defp calculate_start_end_times(day, hour, duration_minutes) do
+    start_time =
+      day
+      |> DateTime.to_date()
+      |> DateTime.new!(Time.new!(hour, 0, 0), "UTC")
+      |> DateTime.to_iso8601()
+
+    end_time =
+      day
+      |> DateTime.to_date()
+      |> DateTime.new!(Time.new!(hour, 0, 0), "UTC")
+      |> DateTime.add(duration_minutes * 60, :second)
+      |> DateTime.to_iso8601()
+
+    {start_time, end_time}
   end
 
   defp slots_overlap?({slot_start, slot_end}, {busy_start, busy_end}) do

@@ -1,4 +1,8 @@
 defmodule FinancialAdvisorAiWeb.UserAuth do
+  @moduledoc """
+  User authentication for the Financial Advisor AI web application.
+  """
+
   use FinancialAdvisorAiWeb, :verified_routes
 
   import Plug.Conn

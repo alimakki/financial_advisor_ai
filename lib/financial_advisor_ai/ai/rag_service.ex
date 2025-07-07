@@ -110,17 +110,17 @@ defmodule FinancialAdvisorAi.AI.RagService do
     |> Repo.all()
   end
 
-  defp search_family_mentions(user_id, query) do
-    family_keywords = [
-      "kid",
-      "child",
-      "son",
-      "daughter",
-      "family",
-      "baseball",
-      "soccer",
-      "school"
-    ]
+  defp search_family_mentions(user_id, _query) do
+    # family_keywords = [
+    #   "kid",
+    #   "child",
+    #   "son",
+    #   "daughter",
+    #   "family",
+    #   "baseball",
+    #   "soccer",
+    #   "school"
+    # ]
 
     results =
       EmailEmbedding
@@ -180,8 +180,8 @@ defmodule FinancialAdvisorAi.AI.RagService do
     }
   end
 
-  defp search_meeting_mentions(user_id, query) do
-    meeting_keywords = ["meeting", "appointment", "schedule", "calendar", "call", "zoom"]
+  defp search_meeting_mentions(user_id, _query) do
+    #_meeting_keywords = ["meeting", "appointment", "schedule", "calendar", "call", "zoom"]
 
     results =
       EmailEmbedding
@@ -250,7 +250,7 @@ defmodule FinancialAdvisorAi.AI.RagService do
     |> Enum.take(20)
   end
 
-  defp calculate_importance(email_data, content) do
+  defp calculate_importance(_email_data, content) do
     # Simple importance scoring based on content length and keywords
     base_score = String.length(content) / 100
     keyword_bonus = if String.contains?(content, ["urgent", "important", "asap"]), do: 2, else: 0

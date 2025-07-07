@@ -17,10 +17,13 @@ defmodule FinancialAdvisorAi.Integrations.GmailService do
   end
 
   def get_message(integration, message_id) do
-    with {:ok, response} <- make_gmail_request(integration, "/users/me/messages/#{message_id}") do
-      {:ok, parse_message(response)}
-    else
-      error -> error
+    make_gmail_request(integration, "/users/me/messages/#{message_id}")
+    |> case do
+      {:ok, response} ->
+        {:ok, parse_message(response)}
+
+      error ->
+        error
     end
   end
 

@@ -1,4 +1,8 @@
 defmodule FinancialAdvisorAi.AI.GmailPollJob do
+  @moduledoc """
+  Gmail poll job for the Financial Advisor AI web application.
+  """
+
   use Oban.Worker, queue: :default, max_attempts: 3
 
   alias FinancialAdvisorAi.Integrations.GmailService

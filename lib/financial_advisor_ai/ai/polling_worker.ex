@@ -16,7 +16,7 @@ defmodule FinancialAdvisorAi.AI.PollingWorker do
     EventProcessor
   }
 
-  @poll_interval :timer.minutes(5)
+  @poll_interval :timer.minutes(1)
 
   def start_link(_opts) do
     GenServer.start_link(__MODULE__, %{}, name: __MODULE__)

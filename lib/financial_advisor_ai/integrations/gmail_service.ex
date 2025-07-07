@@ -3,9 +3,14 @@ defmodule FinancialAdvisorAi.Integrations.GmailService do
   Gmail integration service for reading and sending emails.
   """
 
+  alias FinancialAdvisorAi.AI.LlmService
   alias FinancialAdvisorAi.AI
 
+  require Logger
+
   @gmail_base_url "https://gmail.googleapis.com/gmail/v1"
+  # Conservative estimate: ~3 characters per token, with some buffer
+  @max_embedding_chars 20_000
 
   def list_messages(user_id, opts \\ []) do
     with {:ok, integration} <- get_gmail_integration(user_id),
@@ -40,8 +45,20 @@ defmodule FinancialAdvisorAi.Integrations.GmailService do
 
   def create_contact_from_email(user_id, email_data) do
     # Extract sender information and create embeddings for RAG
+    Logger.info("Creating contact from email: #{inspect(email_data)}")
     sender = extract_sender(email_data)
     content = extract_content(email_data)
+
+    embedding_result =
+      case LlmService.create_embedding(content) do
+        {:ok, embedding} ->
+          %{"data" => [data], "usage" => usage} = embedding
+          %{data: data, usage: usage}
+
+        {:error, reason} ->
+          Logger.error("Error creating embedding for email: #{inspect(reason)}")
+          %{data: nil, usage: nil}
+      end
 
     # Store email embedding for RAG
     AI.create_email_embedding(%{
@@ -52,9 +69,13 @@ defmodule FinancialAdvisorAi.Integrations.GmailService do
       sender: sender,
       date: email_data[:date],
       recipient: extract_recipient(email_data),
+      embedding: Map.get(embedding_result.data, "embedding", nil),
       metadata: %{
         thread_id: email_data[:thread_id],
-        labels: email_data[:labels] || []
+        labels: email_data[:labels] || [],
+        model: "text-embedding-3-small",
+        prompt_tokens: Map.get(embedding_result.usage, "prompt_tokens", 0),
+        total_tokens: Map.get(embedding_result.usage, "total_tokens", 0)
       }
     })
   end
@@ -231,7 +252,24 @@ defmodule FinancialAdvisorAi.Integrations.GmailService do
   end
 
   defp extract_content(email_data) do
-    email_data[:body]
+    raw_content = email_data[:body] || ""
+
+    # Clean and prepare content for embedding
+    cleaned_content =
+      raw_content
+      |> strip_html_tags()
+      |> normalize_whitespace()
+      |> truncate_for_embedding()
+
+    # Create a structured content that includes subject for better context
+    subject = email_data[:subject] || ""
+
+    case {subject, cleaned_content} do
+      {"", ""} -> "Empty email"
+      {subject, ""} -> "Subject: #{subject}"
+      {"", content} -> content
+      {subject, content} -> "Subject: #{subject}\n\n#{content}"
+    end
   end
 
   defp extract_recipient(email_data) do
@@ -259,4 +297,45 @@ defmodule FinancialAdvisorAi.Integrations.GmailService do
         end
     end
   end
+
+  # Helper functions for content processing
+
+  defp strip_html_tags(content) when is_binary(content) do
+    content
+    |> String.replace(~r/<[^>]*>/, " ")  # Remove HTML tags
+    |> String.replace(~r/&[a-zA-Z0-9#]+;/, " ")  # Remove HTML entities
+    |> String.replace(~r/\s+/, " ")  # Normalize whitespace
+  end
+
+  defp strip_html_tags(content), do: content
+
+  defp normalize_whitespace(content) when is_binary(content) do
+    content
+    |> String.replace(~r/\s+/, " ")  # Replace multiple whitespace with single space
+    |> String.replace(~r/\n\s*\n/, "\n")  # Replace multiple newlines with single newline
+    |> String.trim()
+  end
+
+  defp normalize_whitespace(content), do: content
+
+  defp truncate_for_embedding(content) when is_binary(content) do
+    if String.length(content) <= @max_embedding_chars do
+      content
+    else
+      # Truncate but try to end at a word boundary
+      truncated = String.slice(content, 0, @max_embedding_chars)
+
+      case String.split(truncated, " ") do
+        [] -> truncated
+        words ->
+          # Remove the last word if it might be cut off
+          words
+          |> Enum.slice(0..-2//-1)
+          |> Enum.join(" ")
+          |> Kernel.<>("...")
+      end
+    end
+  end
+
+  defp truncate_for_embedding(content), do: content
 end

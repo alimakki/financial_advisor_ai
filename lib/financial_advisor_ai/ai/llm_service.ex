@@ -9,7 +9,8 @@ defmodule FinancialAdvisorAi.AI.LlmService do
   alias FinancialAdvisorAi.Integrations.CalendarService
 
   # @openai_api_url "https://api.openai.com/v1"
-  @default_model "qwen/qwen3-4b"
+  @default_model "gpt-4o-mini"
+  @embeddings_model "text-embedding-3-small"
 
   @doc """
   Generates an AI response based on user question and RAG context.
@@ -68,7 +69,7 @@ defmodule FinancialAdvisorAi.AI.LlmService do
   end
 
   def create_embedding(text_data) do
-    make_embedding_request(text_data, @default_model)
+    make_embedding_request(text_data, @embeddings_model)
   end
 
   # Private functions

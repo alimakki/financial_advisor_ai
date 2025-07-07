@@ -337,6 +337,22 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
                   </a>
                 <% end %>
               </div>
+              <div class="flex items-center justify-between p-3 rounded-lg bg-white border border-gray-200 hover:bg-gray-50 transition-colors">
+                <.link navigate={~p"/conversations"} class="flex items-center justify-between w-full">
+                  <div class="flex items-center space-x-3">
+                    <div class="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
+                      <svg class="w-4 h-4 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M2 5a2 2 0 012-2h7a2 2 0 012 2v4a2 2 0 01-2 2H9l-3 3v-3H4a2 2 0 01-2-2V5z" />
+                        <path d="M15 7v2a4 4 0 01-4 4H9.828l-1.766 1.767c.28.149.599.233.938.233h2l3 3v-3h2a2 2 0 002-2V9a2 2 0 00-2-2h-1z" />
+                      </svg>
+                    </div>
+                    <span class="text-sm font-medium text-gray-700">Manage Conversations</span>
+                  </div>
+                  <svg class="w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                  </svg>
+                </.link>
+              </div>
             </div>
             <%= unless @hubspot_connected do %>
               <div class="mt-4 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">

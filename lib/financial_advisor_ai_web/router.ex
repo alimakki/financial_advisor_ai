@@ -54,6 +54,12 @@ defmodule FinancialAdvisorAiWeb.Router do
       live "/", ChatLive, :index
       live "/users/settings/confirm-email/:token", UserLive.Settings, :confirm_email
 
+      # Conversation routes
+      live "/conversations", ConversationLive.Index, :index
+      live "/conversations/new", ConversationLive.Form, :new
+      live "/conversations/:id", ConversationLive.Show, :show
+      live "/conversations/:id/edit", ConversationLive.Form, :edit
+
       get "/auth/hubspot", OauthController, :hubspot
       get "/auth/hubspot/callback", OauthController, :hubspot_callback
     end

@@ -50,9 +50,12 @@ defmodule FinancialAdvisorAi.AI.Integration do
   """
   def token_expires_soon?(%__MODULE__{} = integration, buffer_minutes \\ 5) do
     case integration.expires_at do
-      nil -> false
+      nil ->
+        false
+
       expires_at ->
-        buffer_time = buffer_minutes * 60  # Convert to seconds
+        # Convert to seconds
+        buffer_time = buffer_minutes * 60
         threshold = DateTime.utc_now() |> DateTime.add(buffer_time, :second)
         DateTime.compare(expires_at, threshold) != :gt
     end

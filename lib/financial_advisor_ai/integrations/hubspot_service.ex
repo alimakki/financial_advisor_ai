@@ -186,9 +186,14 @@ defmodule FinancialAdvisorAi.Integrations.HubspotService do
       integration ->
         # Check if token needs refreshing and refresh if necessary
         case TokenRefreshService.refresh_if_needed(integration) do
-          {:ok, updated_integration} -> {:ok, updated_integration}
+          {:ok, updated_integration} ->
+            {:ok, updated_integration}
+
           {:error, reason} ->
-            Logger.warning("Token refresh failed for HubSpot integration user #{user_id}: #{inspect(reason)}")
+            Logger.warning(
+              "Token refresh failed for HubSpot integration user #{user_id}: #{inspect(reason)}"
+            )
+
             # Still try to use the existing token in case it works
             {:ok, integration}
         end

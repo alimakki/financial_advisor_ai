@@ -45,12 +45,14 @@ defmodule FinancialAdvisorAi.AI.AgentTools do
     client_email = Map.get(parameters, "client_email")
     subject = Map.get(parameters, "subject")
     duration_minutes = Map.get(parameters, "duration_minutes", 60)
+    preferred_times = Map.get(parameters, "preferred_times", [])
 
     case CalendarService.schedule_meeting_with_client(
            user_id,
            client_email,
            subject,
-           duration_minutes
+           duration_minutes,
+           preferred_times
          ) do
       {:ok, event} ->
         Logger.info("Meeting scheduled successfully with #{client_email}")

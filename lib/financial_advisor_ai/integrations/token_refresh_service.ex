@@ -25,7 +25,10 @@ defmodule FinancialAdvisorAi.Integrations.TokenRefreshService do
         {:ok, integration}
 
       token_expires_soon?(integration) ->
-        Logger.info("Refreshing token for #{integration.provider} integration for user #{integration.user_id}")
+        Logger.info(
+          "Refreshing token for #{integration.provider} integration for user #{integration.user_id}"
+        )
+
         refresh_token(integration)
 
       true ->
@@ -55,7 +58,8 @@ defmodule FinancialAdvisorAi.Integrations.TokenRefreshService do
 
   def token_expires_soon?(%Integration{expires_at: expires_at}) do
     # Consider token expired if it expires within 5 minutes
-    buffer_time = 5 * 60  # 5 minutes in seconds
+    # 5 minutes in seconds
+    buffer_time = 5 * 60
     threshold = DateTime.utc_now() |> DateTime.add(buffer_time, :second)
 
     DateTime.compare(expires_at, threshold) != :gt
@@ -74,7 +78,10 @@ defmodule FinancialAdvisorAi.Integrations.TokenRefreshService do
 
   defp refresh_google_token(%Integration{} = integration) do
     if is_nil(integration.refresh_token) do
-      Logger.error("No refresh token available for Google integration user #{integration.user_id}")
+      Logger.error(
+        "No refresh token available for Google integration user #{integration.user_id}"
+      )
+
       {:error, :no_refresh_token}
     else
       perform_google_token_refresh(integration)
@@ -82,7 +89,6 @@ defmodule FinancialAdvisorAi.Integrations.TokenRefreshService do
   end
 
   defp perform_google_token_refresh(%Integration{} = integration) do
-
     params = %{
       grant_type: "refresh_token",
       refresh_token: integration.refresh_token,
@@ -95,7 +101,10 @@ defmodule FinancialAdvisorAi.Integrations.TokenRefreshService do
         update_integration_tokens(integration, body)
 
       {:ok, %{status: 400, body: %{"error" => "invalid_grant"}}} ->
-        Logger.error("Google refresh token invalid for user #{integration.user_id}, requires re-authentication")
+        Logger.error(
+          "Google refresh token invalid for user #{integration.user_id}, requires re-authentication"
+        )
+
         {:error, :invalid_refresh_token}
 
       {:ok, %{status: status, body: body}} ->
@@ -110,7 +119,10 @@ defmodule FinancialAdvisorAi.Integrations.TokenRefreshService do
 
   defp refresh_hubspot_token(%Integration{} = integration) do
     if is_nil(integration.refresh_token) do
-      Logger.error("No refresh token available for HubSpot integration user #{integration.user_id}")
+      Logger.error(
+        "No refresh token available for HubSpot integration user #{integration.user_id}"
+      )
+
       {:error, :no_refresh_token}
     else
       perform_hubspot_token_refresh(integration)
@@ -118,7 +130,6 @@ defmodule FinancialAdvisorAi.Integrations.TokenRefreshService do
   end
 
   defp perform_hubspot_token_refresh(%Integration{} = integration) do
-
     params = %{
       grant_type: "refresh_token",
       refresh_token: integration.refresh_token,
@@ -131,7 +142,10 @@ defmodule FinancialAdvisorAi.Integrations.TokenRefreshService do
         update_integration_tokens(integration, body)
 
       {:ok, %{status: 400, body: %{"error" => "invalid_grant"}}} ->
-        Logger.error("HubSpot refresh token invalid for user #{integration.user_id}, requires re-authentication")
+        Logger.error(
+          "HubSpot refresh token invalid for user #{integration.user_id}, requires re-authentication"
+        )
+
         {:error, :invalid_refresh_token}
 
       {:ok, %{status: status, body: body}} ->
@@ -151,18 +165,24 @@ defmodule FinancialAdvisorAi.Integrations.TokenRefreshService do
     }
 
     # Some providers may return a new refresh token
-    attrs = if token_response["refresh_token"] do
-      Map.put(attrs, :refresh_token, token_response["refresh_token"])
-    else
-      attrs
-    end
+    attrs =
+      if token_response["refresh_token"] do
+        Map.put(attrs, :refresh_token, token_response["refresh_token"])
+      else
+        attrs
+      end
 
-    case AI.upsert_integration(Map.merge(attrs, %{
-      user_id: integration.user_id,
-      provider: integration.provider
-    })) do
+    case AI.upsert_integration(
+           Map.merge(attrs, %{
+             user_id: integration.user_id,
+             provider: integration.provider
+           })
+         ) do
       {:ok, updated_integration} ->
-        Logger.info("Successfully refreshed #{integration.provider} token for user #{integration.user_id}")
+        Logger.info(
+          "Successfully refreshed #{integration.provider} token for user #{integration.user_id}"
+        )
+
         {:ok, updated_integration}
 
       {:error, changeset} ->

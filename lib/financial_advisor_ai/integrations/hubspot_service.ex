@@ -205,14 +205,8 @@ defmodule FinancialAdvisorAi.Integrations.HubspotService do
   contacts that might have new notes since their last processing.
   """
   def process_contact_notes(user_id) do
-    IO.inspect(user_id, label: "processing contact notes for user_id #{user_id}")
-
     # Get all contacts that need notes processing
     contacts_needing_processing = get_contacts_needing_notes_processing(user_id)
-
-    IO.inspect(length(contacts_needing_processing),
-      label: "found contacts needing notes processing"
-    )
 
     # Process notes for each contact
     results =
@@ -370,7 +364,6 @@ defmodule FinancialAdvisorAi.Integrations.HubspotService do
       end
 
     make_hubspot_request(integration, "/crm/v3/objects/contacts", params)
-    |> IO.inspect(label: "fetch_contacts_since")
     |> case do
       {:ok, response} -> {:ok, response["results"] || []}
       error -> error
@@ -397,7 +390,6 @@ defmodule FinancialAdvisorAi.Integrations.HubspotService do
           integration,
           "/crm/v3/objects/contacts/#{contact_id}/associations/notes"
         )
-        |> IO.inspect(label: "get_contact_notes_associations")
         |> case do
           {:ok, response} ->
             note_associations = response["results"] || []

@@ -14,6 +14,7 @@ defmodule FinancialAdvisorAi.AI do
     Integration,
     EmailEmbedding
   }
+  alias FinancialAdvisorAi.Integrations.TokenRefreshService
 
   # Conversations
 
@@ -124,6 +125,73 @@ defmodule FinancialAdvisorAi.AI do
         |> Integration.changeset(attrs)
         |> Repo.update()
     end
+  end
+
+  @doc """
+  Gets an integration with automatic token refresh if needed.
+
+  This function will automatically refresh the access token if it's expired
+  or close to expiry, returning the updated integration.
+  """
+  def get_integration_with_refresh(user_id, provider) do
+    case get_integration(user_id, provider) do
+      nil ->
+        nil
+
+      integration ->
+        case TokenRefreshService.refresh_if_needed(integration) do
+          {:ok, updated_integration} -> updated_integration
+          {:error, _reason} -> integration
+        end
+    end
+  end
+
+  @doc """
+  Lists all integrations that need token refresh (expired or expiring soon).
+  """
+  def list_integrations_needing_refresh() do
+    # Get integrations that expire within the next hour
+    one_hour_from_now = DateTime.utc_now() |> DateTime.add(60 * 60, :second)
+
+    Integration
+    |> where([i], not is_nil(i.expires_at) and i.expires_at <= ^one_hour_from_now)
+    |> Repo.all()
+    |> Enum.filter(&Integration.token_expires_soon?/1)
+  end
+
+  @doc """
+  Lists all integrations for a specific user that need token refresh.
+  """
+  def list_user_integrations_needing_refresh(user_id) do
+    Integration
+    |> where([i], i.user_id == ^user_id and not is_nil(i.expires_at))
+    |> Repo.all()
+    |> Enum.filter(&Integration.token_expires_soon?/1)
+  end
+
+  @doc """
+  Refreshes tokens for all integrations that need it.
+  Returns a summary of refresh results.
+  """
+  def refresh_all_expiring_tokens() do
+    integrations = list_integrations_needing_refresh()
+
+    results = Enum.map(integrations, fn integration ->
+      case TokenRefreshService.refresh_if_needed(integration) do
+        {:ok, _updated} -> {:ok, integration.provider, integration.user_id}
+        {:error, reason} -> {:error, integration.provider, integration.user_id, reason}
+      end
+    end)
+
+    success_count = Enum.count(results, fn {status, _, _} -> status == :ok end)
+    error_count = Enum.count(results, fn {status, _, _, _} -> status == :error end)
+
+    %{
+      total: length(integrations),
+      success: success_count,
+      errors: error_count,
+      results: results
+    }
   end
 
   # Email Embeddings

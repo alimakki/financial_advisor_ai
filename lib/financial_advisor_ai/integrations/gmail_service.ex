@@ -5,6 +5,7 @@ defmodule FinancialAdvisorAi.Integrations.GmailService do
 
   alias FinancialAdvisorAi.AI.LlmService
   alias FinancialAdvisorAi.AI
+  alias FinancialAdvisorAi.Integrations.TokenRefreshService
 
   require Logger
 
@@ -154,8 +155,18 @@ defmodule FinancialAdvisorAi.Integrations.GmailService do
 
   defp get_gmail_integration(user_id) do
     case AI.get_integration(user_id, "google") do
-      nil -> {:error, :not_connected}
-      integration -> {:ok, integration}
+      nil ->
+        {:error, :not_connected}
+
+      integration ->
+        # Check if token needs refreshing and refresh if necessary
+        case TokenRefreshService.refresh_if_needed(integration) do
+          {:ok, updated_integration} -> {:ok, updated_integration}
+          {:error, reason} ->
+            Logger.warning("Token refresh failed for Gmail integration user #{user_id}: #{inspect(reason)}")
+            # Still try to use the existing token in case it works
+            {:ok, integration}
+        end
     end
   end
 

@@ -55,6 +55,8 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
      |> assign(:google_connected, !is_nil(google_integration))
      |> assign(:hubspot_connected, !is_nil(hubspot_integration))
      |> assign(:is_typing, false)
+     |> assign(:editing_conversation_id, nil)
+     |> assign(:editing_title, nil)
      |> stream(:messages, messages)}
   end
 
@@ -86,6 +88,149 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
      socket
      |> assign(:message_form, to_form(%{"content" => ""}))
      |> assign(:is_typing, true)}
+  end
+
+  @impl true
+  def handle_event("new_conversation", _params, socket) do
+    user_id = socket.assigns.current_scope.user.id
+
+    {:ok, conversation} =
+      AI.create_conversation(%{
+        title: "New Conversation",
+        user_id: user_id
+      })
+
+    conversations = AI.list_conversations(user_id)
+    messages = AI.list_messages(conversation.id)
+
+    {:noreply,
+     socket
+     |> assign(:conversations, conversations)
+     |> assign(:active_conversation, conversation)
+     |> assign(:messages, messages)
+     |> stream(:messages, messages, reset: true)}
+  end
+
+  @impl true
+  def handle_event("switch_conversation", %{"conversation_id" => conversation_id}, socket) do
+    conversation = AI.get_conversation!(conversation_id)
+    messages = AI.list_messages(conversation_id)
+
+    {:noreply,
+     socket
+     |> assign(:active_conversation, conversation)
+     |> assign(:messages, messages)
+     |> stream(:messages, messages, reset: true)}
+  end
+
+  @impl true
+  def handle_event("start_rename", %{"conversation_id" => conversation_id}, socket) do
+    conversation = AI.get_conversation!(conversation_id)
+
+    {:noreply,
+     socket
+     |> assign(:editing_conversation_id, conversation_id)
+     |> assign(:editing_title, conversation.title)}
+  end
+
+  @impl true
+  def handle_event("cancel_rename", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:editing_conversation_id, nil)
+     |> assign(:editing_title, nil)}
+  end
+
+  @impl true
+  def handle_event(
+        "save_rename",
+        %{"conversation_id" => conversation_id, "title" => title},
+        socket
+      ) do
+    conversation = AI.get_conversation!(conversation_id)
+
+    case AI.update_conversation(conversation, %{title: title}) do
+      {:ok, updated_conversation} ->
+        user_id = socket.assigns.current_scope.user.id
+        conversations = AI.list_conversations(user_id)
+
+        socket =
+          socket
+          |> assign(:conversations, conversations)
+          |> assign(:editing_conversation_id, nil)
+          |> assign(:editing_title, nil)
+
+        socket =
+          if socket.assigns.active_conversation.id == conversation_id do
+            assign(socket, :active_conversation, updated_conversation)
+          else
+            socket
+          end
+
+        {:noreply, socket}
+
+      {:error, _changeset} ->
+        {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_event("delete_conversation", %{"conversation_id" => conversation_id}, socket) do
+    conversation = AI.get_conversation!(conversation_id)
+    user_id = socket.assigns.current_scope.user.id
+
+    case AI.delete_conversation(conversation) do
+      {:ok, _} ->
+        conversations = AI.list_conversations(user_id)
+
+        # If we deleted the active conversation, switch to the first available one or create a new one
+        {active_conversation, messages} =
+          case conversations do
+            [first_conversation | _] ->
+              {first_conversation, AI.list_messages(first_conversation.id)}
+
+            [] ->
+              {:ok, new_conversation} =
+                AI.create_conversation(%{
+                  title: "New Conversation",
+                  user_id: user_id
+                })
+
+              {new_conversation, []}
+          end
+
+        # Refresh conversations list to include the potentially new conversation
+        conversations = AI.list_conversations(user_id)
+
+        {:noreply,
+         socket
+         |> assign(:conversations, conversations)
+         |> assign(:active_conversation, active_conversation)
+         |> assign(:messages, messages)
+         |> stream(:messages, messages, reset: true)}
+
+      {:error, _} ->
+        {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_event("disconnect_hubspot", _params, socket) do
+    user_id = socket.assigns.current_scope.user.id
+
+    case AI.get_integration(user_id, "hubspot") do
+      nil ->
+        {:noreply, socket}
+
+      integration ->
+        case AI.delete_integration(integration) do
+          {:ok, _} ->
+            {:noreply, assign(socket, :hubspot_connected, false)}
+
+          {:error, _} ->
+            {:noreply, socket}
+        end
+    end
   end
 
   def handle_event("update_message", %{"content" => content}, socket) do
@@ -328,7 +473,17 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
         <div class="sidebar">
           <!-- Header -->
           <div class="p-4 border-b border-gray-200 bg-gradient-to-r from-blue-600 to-blue-700">
-            <button class="w-full flex items-center justify-center space-x-2 bg-white bg-opacity-20 hover:bg-opacity-30 text-white rounded-lg px-4 py-3 text-sm font-medium transition-all duration-200 backdrop-blur-sm">
+            <div class="text-center">
+              <h1 class="text-white text-lg font-semibold">Financial Advisor AI</h1>
+              <p class="text-blue-100 text-xs mt-1">Your AI Assistant</p>
+            </div>
+          </div>
+          <div class="flex-1 overflow-y-auto p-3 space-y-2">
+            <!-- New Chat Button - ChatGPT Style -->
+            <button
+              phx-click="new_conversation"
+              class="w-full flex items-center justify-center space-x-2 px-4 py-3 mb-4 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-all duration-200 shadow-sm"
+            >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   stroke-linecap="round"
@@ -337,16 +492,96 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
                   d="M12 6v6m0 0v6m0-6h6m-6 0H6"
                 />
               </svg>
-              <span>New Conversation</span>
+              <span>New Chat</span>
             </button>
-          </div>
-          <div class="flex-1 overflow-y-auto p-3 space-y-2">
+
             <%= for conversation <- @conversations do %>
-              <div class={"p-3 hover:bg-gray-50 rounded-xl cursor-pointer transition-all duration-200 #{if conversation.id == @active_conversation.id, do: "border-l-4 border-blue-500 bg-blue-50", else: "border-l-4 border-transparent"}"}>
-                <h3 class="font-medium text-gray-900 text-sm">{conversation.title}</h3>
-                <p class="text-xs text-gray-500 mt-1">
-                  {Calendar.strftime(conversation.updated_at, "%b %d")}
-                </p>
+              <div class={"group relative p-3 hover:bg-gray-50 rounded-xl cursor-pointer transition-all duration-200 #{if conversation.id == @active_conversation.id, do: "border-l-4 border-blue-500 bg-blue-50", else: "border-l-4 border-transparent"}"}>
+                <%= if @editing_conversation_id == conversation.id do %>
+                  <form
+                    phx-submit="save_rename"
+                    phx-value-conversation_id={conversation.id}
+                    class="flex items-center space-x-2"
+                  >
+                    <input
+                      type="text"
+                      name="title"
+                      value={@editing_title}
+                      class="flex-1 text-sm font-medium text-gray-900 bg-white border border-gray-300 rounded px-2 py-1"
+                      autofocus
+                    />
+                    <button type="submit" class="text-green-600 hover:text-green-800">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M5 13l4 4L19 7"
+                        />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      phx-click="cancel_rename"
+                      class="text-gray-600 hover:text-gray-800"
+                    >
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M6 18L18 6M6 6l12 12"
+                        />
+                      </svg>
+                    </button>
+                  </form>
+                <% else %>
+                  <div
+                    phx-click="switch_conversation"
+                    phx-value-conversation_id={conversation.id}
+                    class="flex items-center justify-between"
+                  >
+                    <div class="flex-1 min-w-0">
+                      <h3 class="font-medium text-gray-900 text-sm truncate">{conversation.title}</h3>
+                      <p class="text-xs text-gray-500 mt-1">
+                        {Calendar.strftime(conversation.updated_at, "%b %d")}
+                      </p>
+                    </div>
+                    <div class="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        phx-click="start_rename"
+                        phx-value-conversation_id={conversation.id}
+                        class="text-gray-400 hover:text-gray-600 p-1"
+                        title="Rename"
+                      >
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+                          />
+                        </svg>
+                      </button>
+                      <button
+                        phx-click="delete_conversation"
+                        phx-value-conversation_id={conversation.id}
+                        class="text-gray-400 hover:text-red-600 p-1"
+                        title="Delete"
+                        data-confirm="Are you sure you want to delete this conversation?"
+                      >
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                          />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                <% end %>
               </div>
             <% end %>
           </div>
@@ -368,9 +603,18 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
                   <span class="text-sm font-medium text-gray-700">HubSpot CRM</span>
                 </div>
                 <%= if @hubspot_connected do %>
-                  <span class="px-2 py-1 text-xs font-medium text-green-700 bg-green-100 rounded-full">
-                    Connected
-                  </span>
+                  <div class="flex items-center space-x-2">
+                    <span class="px-2 py-1 text-xs font-medium text-green-700 bg-green-100 rounded-full">
+                      Connected
+                    </span>
+                    <button
+                      phx-click="disconnect_hubspot"
+                      class="text-xs text-red-600 hover:text-red-800"
+                      data-confirm="Are you sure you want to disconnect HubSpot?"
+                    >
+                      Disconnect
+                    </button>
+                  </div>
                 <% else %>
                   <a
                     href="/auth/hubspot"
@@ -379,26 +623,6 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
                     Connect
                   </a>
                 <% end %>
-              </div>
-              <div class="flex items-center justify-between p-3 rounded-lg bg-white border border-gray-200 hover:bg-gray-50 transition-colors">
-                <.link navigate={~p"/conversations"} class="flex items-center justify-between w-full">
-                  <div class="flex items-center space-x-3">
-                    <div class="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
-                      <svg class="w-4 h-4 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M2 5a2 2 0 012-2h7a2 2 0 012 2v4a2 2 0 01-2 2H9l-3 3v-3H4a2 2 0 01-2-2V5z" />
-                        <path d="M15 7v2a4 4 0 01-4 4H9.828l-1.766 1.767c.28.149.599.233.938.233h2l3 3v-3h2a2 2 0 002-2V9a2 2 0 00-2-2h-1z" />
-                      </svg>
-                    </div>
-                    <span class="text-sm font-medium text-gray-700">Manage Conversations</span>
-                  </div>
-                  <svg class="w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                    <path
-                      fill-rule="evenodd"
-                      d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
-                      clip-rule="evenodd"
-                    />
-                  </svg>
-                </.link>
               </div>
             </div>
             <%= unless @hubspot_connected do %>
@@ -409,6 +633,26 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
                 </p>
               </div>
             <% end %>
+
+    <!-- Logout Button -->
+            <div class="mt-4 pt-4 border-t border-gray-200">
+              <.link
+                href={~p"/users/log-out"}
+                method={:delete}
+                class="w-full flex items-center justify-center space-x-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                data-confirm="Are you sure you want to log out?"
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                  />
+                </svg>
+                <span>Logout</span>
+              </.link>
+            </div>
           </div>
         </div>
         <!-- Chat Area -->

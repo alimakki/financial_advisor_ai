@@ -5,7 +5,7 @@ defmodule FinancialAdvisorAi.AI.RagService do
   """
 
   alias FinancialAdvisorAi.AI
-  alias FinancialAdvisorAi.AI.{EmailEmbedding, LlmService}
+  alias FinancialAdvisorAi.AI.{EmailEmbedding, ContactEmbedding, LlmService}
   alias FinancialAdvisorAi.Repo
   import Ecto.Query
   import Pgvector.Ecto.Query
@@ -17,13 +17,46 @@ defmodule FinancialAdvisorAi.AI.RagService do
   def search_context(user_id, query) do
     # Use vector search for better semantic matching
     email_results = search_emails_by_vector(user_id, query)
-    contact_results = search_contacts_by_content(user_id, query)
+    hubspot_contact_results = search_hubspot_contacts_by_vector(user_id, query)
+    email_contact_results = search_contacts_by_content(user_id, query)
 
     %{
       emails: email_results,
-      contacts: contact_results,
-      summary: generate_search_summary(email_results, contact_results, query)
+      contacts: email_contact_results,
+      hubspot_contacts: hubspot_contact_results,
+      summary: generate_search_summary(email_results, email_contact_results, hubspot_contact_results, query)
     }
+  end
+
+  @doc """
+  Searches for HubSpot contacts using vector similarity (cosine distance).
+  """
+  def search_hubspot_contacts_by_vector(user_id, query, limit \\ 10) do
+    # Generate embedding for the query
+    case LlmService.create_embedding(query) do
+      {:ok, response} ->
+        # Extract the embedding vector from the response
+        query_embedding = get_in(response, ["data", Access.at(0), "embedding"])
+
+        if query_embedding do
+          # Use PostgreSQL's vector similarity search with cosine distance
+          ContactEmbedding
+          |> where([c], c.user_id == ^user_id)
+          |> where([c], not is_nil(c.embedding))
+          |> where([c], cosine_distance(c.embedding, ^query_embedding) < 0.5)
+          |> order_by([c], cosine_distance(c.embedding, ^query_embedding))
+          |> limit(^limit)
+          |> Repo.all()
+          |> Enum.map(&format_contact_result/1)
+        else
+          # Fallback to text search if embedding creation fails
+          search_hubspot_contacts_by_content(user_id, query)
+        end
+
+      {:error, _} ->
+        # Fallback to text search if embedding creation fails
+        search_hubspot_contacts_by_content(user_id, query)
+    end
   end
 
   @doc """
@@ -55,6 +88,48 @@ defmodule FinancialAdvisorAi.AI.RagService do
         # Fallback to text search if embedding creation fails
         search_emails_by_content(user_id, query)
     end
+  end
+
+  @doc """
+  Processes and stores contact content for RAG search.
+  Includes embedding generation.
+  """
+  def process_contact_for_rag(user_id, contact_data) do
+    # Extract key information from contact
+    content = extract_contact_content(contact_data)
+
+    # Generate embedding for the contact content
+    embedding =
+      case LlmService.create_embedding(content) do
+        {:ok, response} ->
+          get_in(response, ["data", Access.at(0), "embedding"])
+
+        {:error, _} ->
+          nil
+      end
+
+    contact_embedding_attrs = %{
+      user_id: user_id,
+      contact_id: contact_data["id"] || contact_data[:id],
+      firstname: contact_data["firstname"] || contact_data[:firstname],
+      lastname: contact_data["lastname"] || contact_data[:lastname],
+      email: contact_data["email"] || contact_data[:email],
+      company: contact_data["company"] || contact_data[:company],
+      phone: contact_data["phone"] || contact_data[:phone],
+      lifecycle_stage: contact_data["lifecycle_stage"] || contact_data[:lifecycle_stage],
+      lead_status: contact_data["lead_status"] || contact_data[:lead_status],
+      notes: contact_data["notes"] || contact_data[:notes],
+      content: content,
+      embedding: embedding,
+      metadata: %{
+        created_at: contact_data["created_at"] || contact_data[:created_at],
+        updated_at: contact_data["updated_at"] || contact_data[:updated_at],
+        processed_at: DateTime.utc_now(),
+        importance: calculate_contact_importance(contact_data, content)
+      }
+    }
+
+    AI.create_contact_embedding(contact_embedding_attrs)
   end
 
   @doc """
@@ -178,10 +253,90 @@ defmodule FinancialAdvisorAi.AI.RagService do
     }
   end
 
-  defp generate_search_summary(email_results, contact_results, query) do
+  defp generate_search_summary(email_results, contact_results, hubspot_contact_results, query) do
     email_count = length(email_results)
     contact_count = length(contact_results)
+    hubspot_contact_count = length(hubspot_contact_results)
 
-    "Found #{email_count} relevant emails and #{contact_count} contacts for query: '#{query}'"
+    "Found #{email_count} relevant emails, #{contact_count} email contacts, and #{hubspot_contact_count} HubSpot contacts for query: '#{query}'"
+  end
+
+  defp search_hubspot_contacts_by_content(user_id, query) do
+    ContactEmbedding
+    |> where([c], c.user_id == ^user_id)
+    |> where(
+      [c],
+      fragment("? LIKE ? OR ? LIKE ? OR ? LIKE ? OR ? LIKE ?",
+        c.content, ^"%#{query}%",
+        c.firstname, ^"%#{query}%",
+        c.lastname, ^"%#{query}%",
+        c.email, ^"%#{query}%"
+      )
+    )
+    |> order_by([c], desc: c.inserted_at)
+    |> limit(10)
+    |> Repo.all()
+    |> Enum.map(&format_contact_result/1)
+  end
+
+    defp format_contact_result(contact_embedding) do
+    full_name = "#{contact_embedding.firstname} #{contact_embedding.lastname}" |> String.trim()
+
+    %{
+      id: contact_embedding.contact_id,
+      name: if(full_name == "", do: contact_embedding.email, else: full_name),
+      email: contact_embedding.email,
+      company: contact_embedding.company,
+      phone: contact_embedding.phone,
+      lifecycle_stage: contact_embedding.lifecycle_stage,
+      content_preview: String.slice(contact_embedding.content, 0, 200),
+      date: contact_embedding.inserted_at,
+      relevance_score: Map.get(contact_embedding.metadata, "importance", 1)
+    }
+  end
+
+  defp extract_contact_content(contact_data) do
+    firstname = contact_data["firstname"] || contact_data[:firstname] || ""
+    lastname = contact_data["lastname"] || contact_data[:lastname] || ""
+    email = contact_data["email"] || contact_data[:email] || ""
+    company = contact_data["company"] || contact_data[:company] || ""
+    phone = contact_data["phone"] || contact_data[:phone] || ""
+    lifecycle_stage = contact_data["lifecycle_stage"] || contact_data[:lifecycle_stage] || ""
+    lead_status = contact_data["lead_status"] || contact_data[:lead_status] || ""
+    notes = contact_data["notes"] || contact_data[:notes] || ""
+
+    # Create structured content for embedding
+    parts = [
+      "Name: #{firstname} #{lastname}",
+      "Email: #{email}",
+      "Company: #{company}",
+      "Phone: #{phone}",
+      "Lifecycle Stage: #{lifecycle_stage}",
+      "Lead Status: #{lead_status}",
+      "Notes: #{notes}"
+    ]
+    |> Enum.reject(&(&1 == ""))
+    |> Enum.join(". ")
+
+    if parts == "", do: "Contact record", else: parts
+  end
+
+  defp calculate_contact_importance(contact_data, content) do
+    # Simple importance scoring based on available data
+    base_score = 1
+
+    # Add score for having company info
+    company_bonus = if (contact_data["company"] || contact_data[:company]) not in [nil, ""], do: 1, else: 0
+
+    # Add score for having phone number
+    phone_bonus = if (contact_data["phone"] || contact_data[:phone]) not in [nil, ""], do: 1, else: 0
+
+    # Add score for having notes
+    notes_bonus = if (contact_data["notes"] || contact_data[:notes]) not in [nil, ""], do: 2, else: 0
+
+    # Add score for content length
+    content_bonus = String.length(content) / 100
+
+    min(base_score + company_bonus + phone_bonus + notes_bonus + content_bonus, 10)
   end
 end

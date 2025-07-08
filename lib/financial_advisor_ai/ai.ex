@@ -12,7 +12,8 @@ defmodule FinancialAdvisorAi.AI do
     Task,
     OngoingInstruction,
     Integration,
-    EmailEmbedding
+    EmailEmbedding,
+    ContactEmbedding
   }
 
   alias FinancialAdvisorAi.Integrations.TokenRefreshService
@@ -209,6 +210,39 @@ defmodule FinancialAdvisorAi.AI do
     EmailEmbedding
     |> where([e], e.user_id == ^user_id)
     |> where([e], ilike(e.content, ^"%#{query}%") or ilike(e.subject, ^"%#{query}%"))
+    |> Repo.all()
+  end
+
+  # Contact Embeddings
+
+  def create_contact_embedding(attrs \\ %{}) do
+    %ContactEmbedding{}
+    |> ContactEmbedding.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  def get_contact_embedding_by_contact_id(user_id, contact_id) do
+    ContactEmbedding
+    |> where([c], c.user_id == ^user_id and c.contact_id == ^contact_id)
+    |> Repo.one()
+  end
+
+  def update_contact_embedding(%ContactEmbedding{} = contact_embedding, attrs) do
+    contact_embedding
+    |> ContactEmbedding.changeset(attrs)
+    |> Repo.update()
+  end
+
+  def search_contacts_by_content(user_id, query) do
+    ContactEmbedding
+    |> where([c], c.user_id == ^user_id)
+    |> where([c],
+      ilike(c.content, ^"%#{query}%") or
+      ilike(c.firstname, ^"%#{query}%") or
+      ilike(c.lastname, ^"%#{query}%") or
+      ilike(c.email, ^"%#{query}%") or
+      ilike(c.company, ^"%#{query}%")
+    )
     |> Repo.all()
   end
 end

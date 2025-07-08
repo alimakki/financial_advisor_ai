@@ -56,6 +56,14 @@ defmodule FinancialAdvisorAi.AI.PollingWorker do
           _integration ->
             Oban.insert(FinancialAdvisorAi.AI.GmailPollJob.new(%{"user_id" => user.id}))
         end
+
+        case FinancialAdvisorAi.AI.get_integration(user.id, "hubspot") do
+          nil ->
+            :noop
+
+          _integration ->
+            Oban.insert(FinancialAdvisorAi.AI.HubspotPollJob.new(%{"user_id" => user.id}))
+        end
       end
     end)
   end

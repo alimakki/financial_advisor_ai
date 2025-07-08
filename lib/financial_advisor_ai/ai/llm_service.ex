@@ -743,6 +743,11 @@ defmodule FinancialAdvisorAi.AI.LlmService do
       {:ok, contact} ->
         {:ok, %{tool: "create_contact", contact_id: contact.id, status: "contact_created"}}
 
+      {:error, {409, %{"message" => message}}} ->
+        # Contact already exists - extract existing ID if possible
+        existing_id = extract_existing_contact_id_from_message(message)
+        {:ok, %{tool: "create_contact", contact_id: existing_id, status: "contact_already_exists", message: "Contact already exists in HubSpot"}}
+
       {:error, reason} ->
         {:error, "Failed to create contact: #{inspect(reason)}"}
     end
@@ -848,6 +853,14 @@ defmodule FinancialAdvisorAi.AI.LlmService do
     "✅ Created email task (ID: #{task_id}). I'll send the email for you."
   end
 
+  defp format_success_result(%{tool: "create_contact", status: "contact_created", contact_id: contact_id}) do
+    "✅ Contact created successfully! Contact ID: #{contact_id}"
+  end
+
+  defp format_success_result(%{tool: "create_contact", status: "contact_already_exists", contact_id: contact_id}) do
+    "✅ Contact already exists in HubSpot! Contact ID: #{contact_id}"
+  end
+
   defp format_success_result(%{tool: "create_contact", task_id: task_id}) do
     "✅ Created contact creation task (ID: #{task_id}). I'll add them to your CRM."
   end
@@ -903,4 +916,13 @@ defmodule FinancialAdvisorAi.AI.LlmService do
   end
 
   defp strip_think_tags(text), do: text
+
+  defp extract_existing_contact_id_from_message(message) when is_binary(message) do
+    case Regex.run(~r/Existing ID: (\d+)/, message) do
+      [_, contact_id] -> contact_id
+      _ -> nil
+    end
+  end
+
+  defp extract_existing_contact_id_from_message(_), do: nil
 end

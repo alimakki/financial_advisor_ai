@@ -124,7 +124,7 @@
   flex: 1;
   height: 100vh;
   overflow-y: auto;
-  background: #fff;
+  background: #fafafa;
   display: flex;
   flex-direction: column;
 }
@@ -132,6 +132,45 @@
 .chat-messages {
   flex: 1;
   overflow-y: auto;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+/* Add negative space on larger screens */
+@media (min-width: 1024px) {
+  .chat-messages {
+    max-width: 900px;
+    padding: 3rem 2rem;
+  }
+}
+
+@media (min-width: 1280px) {
+  .chat-messages {
+    max-width: 1000px;
+    padding: 4rem 3rem;
+  }
+}
+
+/* Input area styling to match centered layout */
+.chat-input-area {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+@media (min-width: 1024px) {
+  .chat-input-area {
+    max-width: 900px;
+    padding: 1.5rem 2rem;
+  }
+}
+
+@media (min-width: 1280px) {
+  .chat-input-area {
+    max-width: 1000px;
+    padding: 1.5rem 3rem;
+  }
 }
 
 /* --- End Custom Layout --- */

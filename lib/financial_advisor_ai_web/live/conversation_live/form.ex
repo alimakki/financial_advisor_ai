@@ -92,7 +92,8 @@ defmodule FinancialAdvisorAiWeb.ConversationLive.Form do
 
   defp save_conversation(socket, :new, conversation_params) do
     # Ensure user_id is included
-    conversation_params = Map.put(conversation_params, "user_id", socket.assigns.current_scope.user.id)
+    conversation_params =
+      Map.put(conversation_params, "user_id", socket.assigns.current_scope.user.id)
 
     case AI.create_conversation(conversation_params) do
       {:ok, conversation} ->

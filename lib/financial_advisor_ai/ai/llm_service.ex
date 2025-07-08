@@ -452,6 +452,44 @@ defmodule FinancialAdvisorAi.AI.LlmService do
             required: []
           }
         }
+      },
+      %{
+        type: "function",
+        function: %{
+          name: "search_contacts",
+          description: "Search for contacts in HubSpot CRM by name, email, or company",
+          parameters: %{
+            type: "object",
+            properties: %{
+              query: %{
+                type: "string",
+                description: "Search query to find contacts by name, email, or company"
+              }
+            },
+            required: ["query"]
+          }
+        }
+      },
+      %{
+        type: "function",
+        function: %{
+          name: "create_note",
+          description: "Create a note in HubSpot CRM for a contact",
+          parameters: %{
+            type: "object",
+            properties: %{
+              contact_id: %{
+                type: "string",
+                description: "The HubSpot contact ID to create the note for"
+              },
+              note_content: %{
+                type: "string",
+                description: "The content of the note to create"
+              }
+            },
+            required: ["contact_id", "note_content"]
+          }
+        }
       }
     ]
   end
@@ -467,7 +505,7 @@ defmodule FinancialAdvisorAi.AI.LlmService do
         {:ok, content || "I apologize, but I couldn't generate a response at this time."}
 
       tool_calls ->
-        IO.inspect(tool_calls, label: "tool_calls")
+        # IO.inspect(tool_calls, label: "tool_calls")
         # Process tool calls and send results back to LLM
         execute_tool_calls_and_get_response(
           tool_calls,
@@ -604,6 +642,33 @@ defmodule FinancialAdvisorAi.AI.LlmService do
       end
 
     {:ok, %{tool: "search_emails", results: filtered_emails, query: query}}
+  end
+
+  defp execute_tool("search_contacts", params, user_id) do
+    query = Map.get(params, "query")
+
+    HubspotService.search_contacts(user_id, query)
+    |> case do
+      {:ok, contacts} ->
+        {:ok, %{tool: "search_contacts", results: contacts, query: query}}
+
+      {:error, reason} ->
+        {:error, "Failed to search contacts: #{inspect(reason)}"}
+    end
+  end
+
+  defp execute_tool("create_note", params, user_id) do
+    contact_id = Map.get(params, "contact_id")
+    note_content = Map.get(params, "note_content")
+
+    HubspotService.create_note(user_id, contact_id, note_content)
+    |> case do
+      {:ok, note} ->
+        {:ok, %{tool: "create_note", note_id: note.id, status: "note_created"}}
+
+      {:error, reason} ->
+        {:error, "Failed to create note: #{inspect(reason)}"}
+    end
   end
 
   defp execute_tool("schedule_meeting", params, user_id) do

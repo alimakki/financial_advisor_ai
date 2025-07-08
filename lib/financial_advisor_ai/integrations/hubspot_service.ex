@@ -60,28 +60,35 @@ defmodule FinancialAdvisorAi.Integrations.HubspotService do
   end
 
   def search_contacts(user_id, query) do
-    search_request = %{
-      filterGroups: [
+    email_filter = %{
+      filters: [
+        %{
+          propertyName: "email",
+          operator: "EQ",
+          value: query
+        }
+      ]
+    }
+
+    name_filters =
+      for field <- ["firstname", "lastname"] do
         %{
           filters: [
             %{
-              propertyName: "email",
-              operator: "CONTAINS_TOKEN",
-              value: query
-            },
-            %{
-              propertyName: "firstname",
-              operator: "CONTAINS_TOKEN",
-              value: query
-            },
-            %{
-              propertyName: "lastname",
+              propertyName: field,
               operator: "CONTAINS_TOKEN",
               value: query
             }
           ]
         }
-      ]
+      end
+
+    filter_groups = [email_filter | name_filters]
+
+    search_request = %{
+      filterGroups: filter_groups,
+      properties: ["email", "firstname", "lastname"],
+      limit: 10
     }
 
     with {:ok, integration} <- get_hubspot_integration(user_id),
@@ -186,9 +193,6 @@ defmodule FinancialAdvisorAi.Integrations.HubspotService do
 
       :patch ->
         Req.patch(url, headers: headers, json: params)
-
-      :delete ->
-        Req.delete(url, headers: headers)
     end
     |> handle_response()
   end
@@ -198,6 +202,7 @@ defmodule FinancialAdvisorAi.Integrations.HubspotService do
   end
 
   defp handle_response({:ok, %{status: status, body: body}}) do
+    Logger.error("Hubspot request failed with status #{status} and body #{inspect(body)}")
     {:error, {status, body}}
   end
 

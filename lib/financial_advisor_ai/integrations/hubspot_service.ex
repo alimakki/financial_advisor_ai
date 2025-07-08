@@ -50,7 +50,7 @@ defmodule FinancialAdvisorAi.Integrations.HubspotService do
            make_hubspot_request(
              integration,
              "/crm/v3/objects/contacts/#{contact_id}",
-             contact_data,
+             %{properties: contact_data},
              :patch
            ) do
       {:ok, parse_contact(response)}

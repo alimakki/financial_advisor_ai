@@ -674,8 +674,6 @@ defmodule FinancialAdvisorAi.AI.LlmService do
   end
 
   defp execute_tool("create_contact", params, user_id) do
-    IO.inspect(params, label: "create_contact params")
-
     case HubspotService.create_contact(user_id, params) do
       {:ok, contact} ->
         {:ok, %{tool: "create_contact", contact_id: contact.id, status: "contact_created"}}

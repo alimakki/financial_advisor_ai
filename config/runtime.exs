@@ -42,7 +42,7 @@ if config_env() == :prod do
   # Use DATABASE_URL if provided by Fly.io, otherwise use individual environment variables
   database_url = System.get_env("DATABASE_URL")
 
-  IO.puts("DATABASE_URL exists: #{database_url != nil}")
+  IO.puts("DATABASE_URL exists: #{database_url}")
 
   database_config =
     if database_url do

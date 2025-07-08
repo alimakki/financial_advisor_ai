@@ -1,10 +1,10 @@
-# fly.toml app configuration file generated for financial-advisor-ai-restless-night-5054 on 2025-07-08T05:37:33-04:00
+# fly.toml app configuration file generated for financial-advisor-ai on 2025-07-08T06:23:10-04:00
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'financial-advisor-ai-restless-night-5054'
-primary_region = 'yyz'
+app = 'financial-advisor-ai'
+primary_region = 'ord'
 kill_signal = 'SIGTERM'
 
 [build]
@@ -13,7 +13,7 @@ kill_signal = 'SIGTERM'
   release_command = '/app/bin/migrate'
 
 [env]
-  PHX_HOST = 'financial-advisor-ai-restless-night-5054.fly.dev'
+  PHX_HOST = 'financial-advisor-ai.fly.dev'
   PORT = '8080'
 
 [http_service]

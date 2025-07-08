@@ -93,6 +93,27 @@ let ChatAutoScroll = {
   }
 };
 
-// Register the hook
+// LiveView hook for timezone detection
+let TimezoneDetector = {
+  mounted() {
+    this.detectAndSendTimezone();
+  },
+  detectAndSendTimezone() {
+    try {
+      // Get user's timezone using Intl.DateTimeFormat
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      
+      // Send timezone to the LiveView
+      this.pushEvent("timezone_detected", {timezone: timezone});
+    } catch (error) {
+      console.warn("Could not detect timezone:", error);
+      // Fallback to UTC if detection fails
+      this.pushEvent("timezone_detected", {timezone: "UTC"});
+    }
+  }
+};
+
+// Register the hooks
 liveSocket.hooks.ChatAutoScroll = ChatAutoScroll;
+liveSocket.hooks.TimezoneDetector = TimezoneDetector;
 

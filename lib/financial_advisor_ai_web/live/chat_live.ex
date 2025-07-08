@@ -98,6 +98,27 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
   end
 
   @impl true
+  def handle_event("timezone_detected", %{"timezone" => timezone}, socket) do
+    user_id = socket.assigns.current_scope.user.id
+    user = socket.assigns.current_scope.user
+
+    # Update user's timezone if it's different from the detected one
+    if user.timezone != timezone do
+      case FinancialAdvisorAi.Accounts.update_user_timezone(user, %{timezone: timezone}) do
+        {:ok, updated_user} ->
+          Logger.info("Updated user #{user_id} timezone to #{timezone}")
+          {:noreply, put_in(socket.assigns.current_scope.user, updated_user)}
+
+        {:error, reason} ->
+          Logger.warning("Failed to update user timezone: #{inspect(reason)}")
+          {:noreply, socket}
+      end
+    else
+      {:noreply, socket}
+    end
+  end
+
+  @impl true
   def handle_info({:new_message, message}, socket) do
     {:noreply, stream_insert(socket, :messages, message)}
   end
@@ -282,11 +303,26 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
 
   defp format_date(_), do: "Recent"
 
+  defp format_message_time(utc_time, user_timezone) when user_timezone == "UTC" do
+    Calendar.strftime(utc_time, "%I:%M %p")
+  end
+
+  defp format_message_time(utc_time, user_timezone) do
+    # Use proper timezone conversion with DST support
+    case DateTime.shift_zone(utc_time, user_timezone) do
+      {:ok, user_time} ->
+        Calendar.strftime(user_time, "%I:%M %p")
+      {:error, _} ->
+        # Fallback to UTC if timezone conversion fails
+        Calendar.strftime(utc_time, "%I:%M %p")
+    end
+  end
+
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash}>
-      <div class="app-container">
+    <Layouts.app flash={@flash} current_scope={@current_scope}>
+      <div class="app-container" phx-hook="TimezoneDetector" id="timezone-detector">
         <!-- Sidebar -->
         <div class="sidebar">
           <!-- Header -->
@@ -435,7 +471,7 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
                         clip-rule="evenodd"
                       />
                     </svg>
-                    {Calendar.strftime(message.inserted_at, "%I:%M %p")}
+                    {format_message_time(message.inserted_at, @current_scope.user.timezone || "UTC")}
                   </p>
                 </div>
                 <%= if message.role == "user" do %>

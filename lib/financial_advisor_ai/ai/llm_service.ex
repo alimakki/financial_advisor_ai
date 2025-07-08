@@ -696,7 +696,28 @@ defmodule FinancialAdvisorAi.AI.LlmService do
            params["preferred_times"]
          ) do
       {:ok, availability} ->
-        {:ok, %{tool: "find_calendar_availability", availability: availability}}
+        # Get user timezone for display purposes
+        user = FinancialAdvisorAi.Accounts.get_user!(user_id)
+        user_timezone = user.timezone || "UTC"
+
+        # Format availability with timezone information
+        formatted_availability =
+          availability
+          |> Enum.map(fn slot ->
+            %{
+              start_time: slot.start_time,
+              end_time: slot.end_time,
+              timezone: slot.timezone,
+              duration_minutes: slot.duration_minutes
+            }
+          end)
+
+        {:ok, %{
+          tool: "find_calendar_availability",
+          availability: formatted_availability,
+          user_timezone: user_timezone,
+          total_slots: length(availability)
+        }}
     end
   end
 
@@ -754,6 +775,19 @@ defmodule FinancialAdvisorAi.AI.LlmService do
 
   defp format_success_result(%{tool: "create_task", task_id: task_id}) do
     "✅ Created task (ID: #{task_id}) for follow-up."
+  end
+
+  defp format_success_result(%{tool: "find_calendar_availability", availability: availability, user_timezone: user_timezone, total_slots: total_slots}) do
+    if total_slots > 0 do
+      formatted_availability =
+        Enum.map_join(availability, "\n", fn slot ->
+          "• #{slot.start_time} - #{slot.end_time} (#{slot.timezone})"
+        end)
+
+      "✅ Found #{total_slots} available time slots in #{user_timezone}:\n#{formatted_availability}"
+    else
+      "❌ No available time slots found for your meeting. Please try a different duration or preferred times."
+    end
   end
 
   defp format_success_result(_), do: ""

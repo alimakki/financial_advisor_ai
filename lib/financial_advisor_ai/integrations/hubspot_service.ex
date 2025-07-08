@@ -32,7 +32,12 @@ defmodule FinancialAdvisorAi.Integrations.HubspotService do
   def create_contact(user_id, contact_data) do
     with {:ok, integration} <- get_hubspot_integration(user_id),
          {:ok, response} <-
-           make_hubspot_request(integration, "/crm/v3/objects/contacts", contact_data, :post) do
+           make_hubspot_request(
+             integration,
+             "/crm/v3/objects/contacts",
+             %{properties: contact_data},
+             :post
+           ) do
       {:ok, parse_contact(response)}
     else
       error -> error
@@ -112,44 +117,6 @@ defmodule FinancialAdvisorAi.Integrations.HubspotService do
     with {:ok, integration} <- get_hubspot_integration(user_id),
          {:ok, response} <-
            make_hubspot_request(integration, "/crm/v3/objects/notes", note_data, :post) do
-      {:ok, response}
-    else
-      error -> error
-    end
-  end
-
-  def list_companies(user_id, opts \\ []) do
-    with {:ok, integration} <- get_hubspot_integration(user_id),
-         {:ok, response} <- make_hubspot_request(integration, "/crm/v3/objects/companies", opts) do
-      {:ok, response["results"] || []}
-    else
-      error -> error
-    end
-  end
-
-  def create_company(user_id, company_data) do
-    with {:ok, integration} <- get_hubspot_integration(user_id),
-         {:ok, response} <-
-           make_hubspot_request(integration, "/crm/v3/objects/companies", company_data, :post) do
-      {:ok, response}
-    else
-      error -> error
-    end
-  end
-
-  def list_deals(user_id, opts \\ []) do
-    with {:ok, integration} <- get_hubspot_integration(user_id),
-         {:ok, response} <- make_hubspot_request(integration, "/crm/v3/objects/deals", opts) do
-      {:ok, response["results"] || []}
-    else
-      error -> error
-    end
-  end
-
-  def create_deal(user_id, deal_data) do
-    with {:ok, integration} <- get_hubspot_integration(user_id),
-         {:ok, response} <-
-           make_hubspot_request(integration, "/crm/v3/objects/deals", deal_data, :post) do
       {:ok, response}
     else
       error -> error

@@ -6,7 +6,7 @@ defmodule FinancialAdvisorAi.AI.LlmService do
 
   require Logger
   # alias FinancialAdvisorAi.Repo
-  alias FinancialAdvisorAi.Integrations.CalendarService
+  alias FinancialAdvisorAi.Integrations.{CalendarService, HubspotService}
 
   # @openai_api_url "https://api.openai.com/v1"
   @default_model "gpt-4o"
@@ -377,20 +377,18 @@ defmodule FinancialAdvisorAi.AI.LlmService do
           parameters: %{
             type: "object",
             properties: %{
-              name: %{
+              firstname: %{
                 type: "string",
-                description: "The contact's full name"
+                description: "The contact's first name"
               },
               email: %{
                 type: "string",
                 description: "The contact's email address"
-              },
-              notes: %{
-                type: "string",
-                description: "Initial notes about the contact"
               }
             },
-            required: ["name", "email"]
+            # it is recommended to always include email, because email address is the primary unique identifier to avoid duplicate contacts in HubSpot.
+            # https://developers.hubspot.com/docs/guides/api/crm/objects/contacts
+            required: ["email"]
           }
         }
       },
@@ -469,6 +467,7 @@ defmodule FinancialAdvisorAi.AI.LlmService do
         {:ok, content || "I apologize, but I couldn't generate a response at this time."}
 
       tool_calls ->
+        IO.inspect(tool_calls, label: "tool_calls")
         # Process tool calls and send results back to LLM
         execute_tool_calls_and_get_response(
           tool_calls,
@@ -675,21 +674,14 @@ defmodule FinancialAdvisorAi.AI.LlmService do
   end
 
   defp execute_tool("create_contact", params, user_id) do
-    # Create a task for creating the contact
-    task_params = %{
-      user_id: user_id,
-      title: "Create contact: #{Map.get(params, "name")}",
-      description: "Create contact for #{Map.get(params, "email")}",
-      task_type: "hubspot",
-      parameters: params
-    }
+    IO.inspect(params, label: "create_contact params")
 
-    case FinancialAdvisorAi.AI.create_task(task_params) do
-      {:ok, task} ->
-        {:ok, %{tool: "create_contact", task_id: task.id, status: "task_created"}}
+    case HubspotService.create_contact(user_id, params) do
+      {:ok, contact} ->
+        {:ok, %{tool: "create_contact", contact_id: contact.id, status: "contact_created"}}
 
       {:error, reason} ->
-        {:error, "Failed to create contact task: #{inspect(reason)}"}
+        {:error, "Failed to create contact: #{inspect(reason)}"}
     end
   end
 

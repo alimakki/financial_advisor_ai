@@ -13,7 +13,8 @@ defmodule FinancialAdvisorAi.AI do
     OngoingInstruction,
     Integration,
     EmailEmbedding,
-    ContactEmbedding
+    ContactEmbedding,
+    ContactNote
   }
 
   alias FinancialAdvisorAi.Integrations.TokenRefreshService
@@ -236,13 +237,59 @@ defmodule FinancialAdvisorAi.AI do
   def search_contacts_by_content(user_id, query) do
     ContactEmbedding
     |> where([c], c.user_id == ^user_id)
-    |> where([c],
+    |> where(
+      [c],
       ilike(c.content, ^"%#{query}%") or
-      ilike(c.firstname, ^"%#{query}%") or
-      ilike(c.lastname, ^"%#{query}%") or
-      ilike(c.email, ^"%#{query}%") or
-      ilike(c.company, ^"%#{query}%")
+        ilike(c.firstname, ^"%#{query}%") or
+        ilike(c.lastname, ^"%#{query}%") or
+        ilike(c.email, ^"%#{query}%") or
+        ilike(c.company, ^"%#{query}%")
     )
+    |> Repo.all()
+  end
+
+  # Contact Notes
+
+  def create_contact_note(attrs \\ %{}) do
+    %ContactNote{}
+    |> ContactNote.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  def get_contact_note!(id), do: Repo.get!(ContactNote, id)
+
+  def get_contact_notes_by_contact_id(user_id, contact_id) do
+    contact_embedding = get_contact_embedding_by_contact_id(user_id, contact_id)
+
+    if contact_embedding do
+      ContactNote
+      |> where([n], n.user_id == ^user_id and n.contact_embedding_id == ^contact_embedding.id)
+      |> Repo.all()
+    else
+      []
+    end
+  end
+
+  def get_contact_note_by_hubspot_id(user_id, hubspot_note_id) do
+    ContactNote
+    |> where([n], n.user_id == ^user_id and n.hubspot_note_id == ^hubspot_note_id)
+    |> Repo.one()
+  end
+
+  def update_contact_note(%ContactNote{} = contact_note, attrs) do
+    contact_note
+    |> ContactNote.changeset(attrs)
+    |> Repo.update()
+  end
+
+  def delete_contact_note(%ContactNote{} = contact_note) do
+    Repo.delete(contact_note)
+  end
+
+  def search_contact_notes_by_content(user_id, query) do
+    ContactNote
+    |> where([n], n.user_id == ^user_id)
+    |> where([n], ilike(n.content, ^"%#{query}%"))
     |> Repo.all()
   end
 end

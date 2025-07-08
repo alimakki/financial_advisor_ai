@@ -133,7 +133,7 @@ defmodule FinancialAdvisorAi.AI.AgentTools do
     contact_data = %{
       firstname: extract_first_name(name),
       lastname: extract_last_name(name),
-      email: email,
+      email: email
     }
 
     case HubspotService.create_contact(user_id, contact_data) do
@@ -293,7 +293,10 @@ defmodule FinancialAdvisorAi.AI.AgentTools do
           {:error, {409, %{"message" => message}}} ->
             # Contact already exists - extract existing ID if possible
             existing_id = extract_existing_contact_id(message)
-            Logger.info("Contact already exists during auto-creation: #{sender_name} (#{sender_email}), existing ID: #{existing_id}")
+
+            Logger.info(
+              "Contact already exists during auto-creation: #{sender_name} (#{sender_email}), existing ID: #{existing_id}"
+            )
 
             {:ok,
              %{

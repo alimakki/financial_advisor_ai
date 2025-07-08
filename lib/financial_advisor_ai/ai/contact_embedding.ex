@@ -15,12 +15,14 @@ defmodule FinancialAdvisorAi.AI.ContactEmbedding do
     field :phone, :string
     field :lifecycle_stage, :string
     field :lead_status, :string
-    field :notes, :string
-    field :content, :string  # Combined content for embedding
+    # Combined content for embedding (without notes)
+    field :content, :string
     field :embedding, Pgvector.Ecto.Vector
+    field :notes_processed, :boolean, default: false
     field :metadata, :map, default: %{}
 
     belongs_to :user, FinancialAdvisorAi.Accounts.User
+    has_many :contact_notes, FinancialAdvisorAi.AI.ContactNote
 
     timestamps()
   end
@@ -36,9 +38,9 @@ defmodule FinancialAdvisorAi.AI.ContactEmbedding do
       :phone,
       :lifecycle_stage,
       :lead_status,
-      :notes,
       :content,
       :embedding,
+      :notes_processed,
       :metadata,
       :user_id
     ])

@@ -5,7 +5,7 @@ defmodule FinancialAdvisorAi.AI.RagService do
   """
 
   alias FinancialAdvisorAi.AI
-  alias FinancialAdvisorAi.AI.{EmailEmbedding, ContactEmbedding, LlmService}
+  alias FinancialAdvisorAi.AI.{EmailEmbedding, ContactEmbedding, ContactNote, LlmService}
   alias FinancialAdvisorAi.Repo
   import Ecto.Query
   import Pgvector.Ecto.Query
@@ -18,14 +18,54 @@ defmodule FinancialAdvisorAi.AI.RagService do
     # Use vector search for better semantic matching
     email_results = search_emails_by_vector(user_id, query)
     hubspot_contact_results = search_hubspot_contacts_by_vector(user_id, query)
+    contact_note_results = search_contact_notes_by_vector(user_id, query)
     email_contact_results = search_contacts_by_content(user_id, query)
 
     %{
       emails: email_results,
       contacts: email_contact_results,
       hubspot_contacts: hubspot_contact_results,
-      summary: generate_search_summary(email_results, email_contact_results, hubspot_contact_results, query)
+      contact_notes: contact_note_results,
+      summary:
+        generate_search_summary(
+          email_results,
+          email_contact_results,
+          hubspot_contact_results,
+          contact_note_results,
+          query
+        )
     }
+  end
+
+  @doc """
+  Searches for contact notes using vector similarity (cosine distance).
+  """
+  def search_contact_notes_by_vector(user_id, query, limit \\ 10) do
+    # Generate embedding for the query
+    case LlmService.create_embedding(query) do
+      {:ok, response} ->
+        # Extract the embedding vector from the response
+        query_embedding = get_in(response, ["data", Access.at(0), "embedding"])
+
+        if query_embedding do
+          # Use PostgreSQL's vector similarity search with cosine distance
+          ContactNote
+          |> where([n], n.user_id == ^user_id)
+          |> where([n], not is_nil(n.embedding))
+          |> where([n], cosine_distance(n.embedding, ^query_embedding) < 0.5)
+          |> order_by([n], cosine_distance(n.embedding, ^query_embedding))
+          |> limit(^limit)
+          |> Repo.all()
+          |> Enum.map(&format_contact_note_result/1)
+        else
+          # Fallback to text search if embedding creation fails
+          search_contact_notes_by_content(user_id, query)
+        end
+
+      {:error, _} ->
+        # Fallback to text search if embedding creation fails
+        search_contact_notes_by_content(user_id, query)
+    end
   end
 
   @doc """
@@ -253,12 +293,19 @@ defmodule FinancialAdvisorAi.AI.RagService do
     }
   end
 
-  defp generate_search_summary(email_results, contact_results, hubspot_contact_results, query) do
+  defp generate_search_summary(
+         email_results,
+         contact_results,
+         hubspot_contact_results,
+         contact_note_results,
+         query
+       ) do
     email_count = length(email_results)
     contact_count = length(contact_results)
     hubspot_contact_count = length(hubspot_contact_results)
+    contact_note_count = length(contact_note_results)
 
-    "Found #{email_count} relevant emails, #{contact_count} email contacts, and #{hubspot_contact_count} HubSpot contacts for query: '#{query}'"
+    "Found #{email_count} relevant emails, #{contact_count} email contacts, #{hubspot_contact_count} HubSpot contacts, and #{contact_note_count} contact notes for query: '#{query}'"
   end
 
   defp search_hubspot_contacts_by_content(user_id, query) do
@@ -266,11 +313,16 @@ defmodule FinancialAdvisorAi.AI.RagService do
     |> where([c], c.user_id == ^user_id)
     |> where(
       [c],
-      fragment("? LIKE ? OR ? LIKE ? OR ? LIKE ? OR ? LIKE ?",
-        c.content, ^"%#{query}%",
-        c.firstname, ^"%#{query}%",
-        c.lastname, ^"%#{query}%",
-        c.email, ^"%#{query}%"
+      fragment(
+        "? LIKE ? OR ? LIKE ? OR ? LIKE ? OR ? LIKE ?",
+        c.content,
+        ^"%#{query}%",
+        c.firstname,
+        ^"%#{query}%",
+        c.lastname,
+        ^"%#{query}%",
+        c.email,
+        ^"%#{query}%"
       )
     )
     |> order_by([c], desc: c.inserted_at)
@@ -279,7 +331,7 @@ defmodule FinancialAdvisorAi.AI.RagService do
     |> Enum.map(&format_contact_result/1)
   end
 
-    defp format_contact_result(contact_embedding) do
+  defp format_contact_result(contact_embedding) do
     full_name = "#{contact_embedding.firstname} #{contact_embedding.lastname}" |> String.trim()
 
     %{
@@ -306,17 +358,18 @@ defmodule FinancialAdvisorAi.AI.RagService do
     notes = contact_data["notes"] || contact_data[:notes] || ""
 
     # Create structured content for embedding
-    parts = [
-      "Name: #{firstname} #{lastname}",
-      "Email: #{email}",
-      "Company: #{company}",
-      "Phone: #{phone}",
-      "Lifecycle Stage: #{lifecycle_stage}",
-      "Lead Status: #{lead_status}",
-      "Notes: #{notes}"
-    ]
-    |> Enum.reject(&(&1 == ""))
-    |> Enum.join(". ")
+    parts =
+      [
+        "Name: #{firstname} #{lastname}",
+        "Email: #{email}",
+        "Company: #{company}",
+        "Phone: #{phone}",
+        "Lifecycle Stage: #{lifecycle_stage}",
+        "Lead Status: #{lead_status}",
+        "Notes: #{notes}"
+      ]
+      |> Enum.reject(&(&1 == ""))
+      |> Enum.join(". ")
 
     if parts == "", do: "Contact record", else: parts
   end
@@ -326,17 +379,42 @@ defmodule FinancialAdvisorAi.AI.RagService do
     base_score = 1
 
     # Add score for having company info
-    company_bonus = if (contact_data["company"] || contact_data[:company]) not in [nil, ""], do: 1, else: 0
+    company_bonus =
+      if (contact_data["company"] || contact_data[:company]) not in [nil, ""], do: 1, else: 0
 
     # Add score for having phone number
-    phone_bonus = if (contact_data["phone"] || contact_data[:phone]) not in [nil, ""], do: 1, else: 0
+    phone_bonus =
+      if (contact_data["phone"] || contact_data[:phone]) not in [nil, ""], do: 1, else: 0
 
     # Add score for having notes
-    notes_bonus = if (contact_data["notes"] || contact_data[:notes]) not in [nil, ""], do: 2, else: 0
+    notes_bonus =
+      if (contact_data["notes"] || contact_data[:notes]) not in [nil, ""], do: 2, else: 0
 
     # Add score for content length
     content_bonus = String.length(content) / 100
 
     min(base_score + company_bonus + phone_bonus + notes_bonus + content_bonus, 10)
+  end
+
+  defp search_contact_notes_by_content(user_id, query) do
+    ContactNote
+    |> where([n], n.user_id == ^user_id)
+    |> where([n], ilike(n.content, ^"%#{query}%"))
+    |> order_by([n], desc: n.inserted_at)
+    |> limit(10)
+    |> Repo.all()
+    |> Enum.map(&format_contact_note_result/1)
+  end
+
+  defp format_contact_note_result(contact_note) do
+    %{
+      id: contact_note.id,
+      hubspot_note_id: contact_note.hubspot_note_id,
+      content_preview: String.slice(contact_note.content, 0, 200),
+      content: contact_note.content,
+      date: contact_note.inserted_at,
+      relevance_score: 1,
+      contact_embedding_id: contact_note.contact_embedding_id
+    }
   end
 end

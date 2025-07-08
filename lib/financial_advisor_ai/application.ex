@@ -20,10 +20,12 @@ defmodule FinancialAdvisorAi.Application do
       FinancialAdvisorAi.AI.AgentSupervisor,
       # Start a worker by calling: FinancialAdvisorAi.Worker.start_link(arg)
       # {FinancialAdvisorAi.Worker, arg},
+      # Start Oban before services that depend on it
+      {Oban, oban_config()},
       # Start to serve requests, typically the last entry
       FinancialAdvisorAiWeb.Endpoint,
       FinancialAdvisorAi.AI.PollingWorker,
-      {Oban, oban_config()}
+      FinancialAdvisorAi.AI.TokenRefreshScheduler
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html

@@ -160,13 +160,11 @@ defmodule FinancialAdvisorAi.Integrations.HubspotService do
   end
 
   @doc """
-  Polls for new or updated HubSpot contacts and notes for the given user_id,
+  Polls for new HubSpot contacts and notes for the given user_id,
   imports them into the contact_embeddings table, and updates the last seen
   timestamp in the integration metadata.
   """
   def poll_and_import_contacts_and_notes(user_id) do
-    IO.inspect(user_id, label: "polling hubspot for user_id #{user_id}")
-
     with {:ok, integration} <- get_hubspot_integration(user_id),
          last_seen_timestamp <-
            Map.get(integration.metadata || %{}, "last_seen_hubspot_timestamp"),
@@ -197,6 +195,60 @@ defmodule FinancialAdvisorAi.Integrations.HubspotService do
     else
       error -> error
     end
+  end
+
+  @doc """
+  Processes notes for contacts, checking for new notes since the last processing time.
+  This approach handles both contacts that have never had notes processed and
+  contacts that might have new notes since their last processing.
+  """
+  def process_contact_notes(user_id) do
+    # Get all contacts that need notes processing
+    contacts_needing_processing = get_contacts_needing_notes_processing(user_id)
+
+    # Process notes for each contact
+    results =
+      Enum.map(contacts_needing_processing, fn contact ->
+        case process_contact_notes_since_timestamp(
+               user_id,
+               contact.contact_id,
+               contact.id,
+               contact.notes_last_processed_at
+             ) do
+          {:ok, processed_count} ->
+            # Update the last processed timestamp
+            update_contact_notes_processed_timestamp(contact)
+            {contact.contact_id, {:processed, processed_count}}
+
+          {:error, reason} ->
+            {contact.contact_id, {:error, reason}}
+        end
+      end)
+
+    processed_count =
+      results
+      |> Enum.filter(fn {_contact_id, result} ->
+        case result do
+          {:processed, _} -> true
+          _ -> false
+        end
+      end)
+      |> length()
+
+    {:ok, %{processed_count: processed_count, results: results}}
+  end
+
+  @doc """
+  Gets contacts that need their notes processed.
+  This includes all contacts to check for new notes, not just unprocessed ones.
+  """
+  def get_contacts_needing_notes_processing(user_id) do
+    import Ecto.Query
+
+    FinancialAdvisorAi.AI.ContactEmbedding
+    |> where([c], c.user_id == ^user_id)
+    |> order_by([c], desc: c.inserted_at)
+    |> FinancialAdvisorAi.Repo.all()
   end
 
   defp get_hubspot_integration(user_id) do
@@ -310,7 +362,6 @@ defmodule FinancialAdvisorAi.Integrations.HubspotService do
       end
 
     make_hubspot_request(integration, "/crm/v3/objects/contacts", params)
-    |> IO.inspect(label: "fetch_contacts_since")
     |> case do
       {:ok, response} -> {:ok, response["results"] || []}
       error -> error
@@ -332,13 +383,38 @@ defmodule FinancialAdvisorAi.Integrations.HubspotService do
   defp get_contact_notes(user_id, contact_id) do
     case get_hubspot_integration(user_id) do
       {:ok, integration} ->
+        # First get the note associations
         make_hubspot_request(
           integration,
           "/crm/v3/objects/contacts/#{contact_id}/associations/notes"
         )
         |> case do
-          {:ok, response} -> {:ok, response["results"] || []}
-          error -> error
+          {:ok, response} ->
+            note_associations = response["results"] || []
+
+            # Extract note IDs from associations
+            note_ids = Enum.map(note_associations, fn association -> association["id"] end)
+
+            # Fetch actual note content for each note ID
+            notes =
+              Enum.map(note_ids, fn note_id ->
+                params = %{
+                  properties: "hs_note_body,createdAt,updatedAt",
+                  associations: "contact",
+                  archived: false
+                }
+
+                case make_hubspot_request(integration, "/crm/v3/objects/notes/#{note_id}", params) do
+                  {:ok, note_data} -> note_data
+                  {:error, _} -> nil
+                end
+              end)
+              |> Enum.reject(&is_nil/1)
+
+            {:ok, notes}
+
+          error ->
+            error
         end
 
       error ->
@@ -386,7 +462,7 @@ defmodule FinancialAdvisorAi.Integrations.HubspotService do
         lead_status: contact.lead_status,
         content: contact.content,
         embedding: embedding,
-        notes_processed: false,
+        notes_last_processed_at: nil,
         metadata: %{
           created_at: contact.created_at,
           updated_at: contact.updated_at,
@@ -410,86 +486,120 @@ defmodule FinancialAdvisorAi.Integrations.HubspotService do
             end
         end
 
-      # Now process notes separately if contact embedding was created/updated successfully
+      # Process notes for this contact separately (notes will be processed later by the job)
+      # We don't process notes here to avoid slowing down the contact import process
       if contact_embedding do
-        process_contact_notes(user_id, contact.id, contact_embedding.id)
+        IO.puts(
+          "Contact #{contact.id} imported successfully - notes will be processed separately"
+        )
       end
     end)
   end
 
-  defp process_contact_notes(user_id, contact_id, contact_embedding_id) do
+  defp process_contact_notes_since_timestamp(
+         user_id,
+         contact_id,
+         contact_embedding_id,
+         _last_processed_at
+       ) do
     alias FinancialAdvisorAi.AI.LlmService
 
     # Fetch notes for this contact
-    case get_contact_notes(user_id, contact_id) |> IO.inspect(label: "get_contact_notes") do
+    case get_contact_notes(user_id, contact_id) do
       {:ok, notes_data} ->
-        # Process each note separately
-        Enum.each(notes_data, fn note_data ->
-          # Extract note content
-          note_content =
-            case note_data["properties"] do
-              %{"hs_note_body" => body} -> body
-              _ -> ""
-            end
+        # Process each note - we'll check for duplicates by hubspot_note_id instead of timestamp filtering
+        processed_count =
+          Enum.reduce(notes_data, 0, fn note_data, acc ->
+            # Extract and clean note content
+            raw_note_content =
+              case note_data["properties"] do
+                %{"hs_note_body" => body} -> body
+                _ -> ""
+              end
 
-          # Only process if note has content
-          if note_content != "" do
-            # Check if note already exists to avoid duplicates
-            hubspot_note_id = note_data["id"]
+            # Strip HTML tags and clean the content
+            note_content = clean_note_content(raw_note_content)
 
-            existing_note =
-              FinancialAdvisorAi.AI.get_contact_note_by_hubspot_id(user_id, hubspot_note_id)
+            # Only process if note has content after cleaning
+            if note_content != "" do
+              # Check if note already exists to avoid duplicates
+              hubspot_note_id = note_data["id"]
 
-            if is_nil(existing_note) do
-              # Generate embedding for the note content
-              embedding =
-                case LlmService.create_embedding(note_content) do
-                  {:ok, response} ->
-                    get_in(response, ["data", Access.at(0), "embedding"])
+              existing_note =
+                FinancialAdvisorAi.AI.get_contact_note_by_hubspot_id(user_id, hubspot_note_id)
 
-                  {:error, _} ->
-                    nil
-                end
+              if is_nil(existing_note) do
+                # Generate embedding for the note content
+                embedding =
+                  case LlmService.create_embedding(note_content) do
+                    {:ok, response} ->
+                      get_in(response, ["data", Access.at(0), "embedding"])
 
-              # Create contact note record
-              note_attrs = %{
-                user_id: user_id,
-                contact_embedding_id: contact_embedding_id,
-                hubspot_note_id: hubspot_note_id,
-                content: note_content,
-                embedding: embedding,
-                metadata: %{
-                  created_at: note_data["createdAt"],
-                  updated_at: note_data["updatedAt"],
-                  processed_at: DateTime.utc_now()
+                    {:error, _} ->
+                      nil
+                  end
+
+                # Create contact note record
+                note_attrs = %{
+                  user_id: user_id,
+                  contact_embedding_id: contact_embedding_id,
+                  hubspot_note_id: hubspot_note_id,
+                  content: note_content,
+                  embedding: embedding,
+                  metadata: %{
+                    created_at: note_data["createdAt"],
+                    updated_at: note_data["updatedAt"],
+                    processed_at: DateTime.utc_now()
+                  }
                 }
-              }
 
-              FinancialAdvisorAi.AI.create_contact_note(note_attrs)
+                case FinancialAdvisorAi.AI.create_contact_note(note_attrs) do
+                  {:ok, _} -> acc + 1
+                  {:error, _} -> acc
+                end
+              else
+                acc
+              end
+            else
+              acc
             end
-          end
-        end)
+          end)
 
-        # Mark contact as having notes processed
-        contact_embedding =
-          FinancialAdvisorAi.AI.get_contact_embedding_by_contact_id(user_id, contact_id)
+        {:ok, processed_count}
 
-        if contact_embedding do
-          FinancialAdvisorAi.AI.update_contact_embedding(contact_embedding, %{
-            notes_processed: true
-          })
-        end
-
-      {:error, _} ->
-        # If we can't fetch notes, still mark as processed to avoid retrying
-        contact_embedding =
-          FinancialAdvisorAi.AI.get_contact_embedding_by_contact_id(user_id, contact_id)
-
-        if contact_embedding do
-          FinancialAdvisorAi.AI.update_contact_embedding(contact_embedding, %{
-            notes_processed: true
-          })
-        end
+      {:error, reason} ->
+        {:error, "Failed to fetch notes for contact #{contact_id}: #{inspect(reason)}"}
     end
   end
+
+  defp update_contact_notes_processed_timestamp(contact) do
+    FinancialAdvisorAi.AI.update_contact_embedding(contact, %{
+      notes_last_processed_at: DateTime.utc_now()
+    })
+  end
+
+  # Helper function to clean HTML from note content
+  defp clean_note_content(content) when is_binary(content) do
+    content
+    # Convert common HTML entities to their characters
+    |> String.replace("&amp;", "&")
+    |> String.replace("&lt;", "<")
+    |> String.replace("&gt;", ">")
+    |> String.replace("&quot;", "\"")
+    |> String.replace("&apos;", "'")
+    |> String.replace("&nbsp;", " ")
+    # Add space before closing block tags to preserve word boundaries
+    |> String.replace(~r/<\/(p|div|br|h[1-6]|li|ul|ol|blockquote)>/i, " ")
+    # Add space for self-closing tags
+    |> String.replace(~r/<br\s*\/?>/, " ")
+    # Remove all remaining HTML tags
+    |> String.replace(~r/<[^>]*>/, "")
+    # Remove any remaining HTML entities
+    |> String.replace(~r/&[a-zA-Z0-9#]+;/, " ")
+    # Normalize whitespace (collapse multiple spaces/newlines into single space)
+    |> String.replace(~r/\s+/, " ")
+    |> String.trim()
+  end
+
+  defp clean_note_content(content), do: content
 end

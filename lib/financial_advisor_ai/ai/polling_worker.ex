@@ -16,6 +16,12 @@ defmodule FinancialAdvisorAi.AI.PollingWorker do
     EventProcessor
   }
 
+  alias FinancialAdvisorAi.AI.{
+    GmailPollJob,
+    HubspotPollJob,
+    HubspotNotesJob
+  }
+
   @poll_interval :timer.minutes(1)
 
   def start_link(_opts) do
@@ -54,7 +60,7 @@ defmodule FinancialAdvisorAi.AI.PollingWorker do
             :noop
 
           _integration ->
-            Oban.insert(FinancialAdvisorAi.AI.GmailPollJob.new(%{"user_id" => user.id}))
+            Oban.insert(GmailPollJob.new(%{"user_id" => user.id}))
         end
 
         case FinancialAdvisorAi.AI.get_integration(user.id, "hubspot") do
@@ -62,7 +68,9 @@ defmodule FinancialAdvisorAi.AI.PollingWorker do
             :noop
 
           _integration ->
-            Oban.insert(FinancialAdvisorAi.AI.HubspotPollJob.new(%{"user_id" => user.id}))
+            Oban.insert(HubspotPollJob.new(%{"user_id" => user.id}))
+            # Also schedule periodic notes processing
+            Oban.insert(HubspotNotesJob.new(%{"user_id" => user.id}))
         end
       end
     end)

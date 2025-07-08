@@ -753,21 +753,18 @@ defmodule FinancialAdvisorAi.AI.LlmService do
   end
 
   defp execute_tool("send_email", params, user_id) do
-    # Create a task for sending the email
-    task_params = %{
-      user_id: user_id,
-      title: "Send email: #{Map.get(params, "subject")}",
-      description: "Send email to #{Map.get(params, "to")}",
-      task_type: "email",
-      parameters: params
-    }
-
-    case FinancialAdvisorAi.AI.create_task(task_params) do
-      {:ok, task} ->
-        {:ok, %{tool: "send_email", task_id: task.id, status: "task_created"}}
+    FinancialAdvisorAi.Integrations.GmailService.send_email(
+      user_id,
+      params["to"],
+      params["subject"],
+      params["body"]
+    )
+    |> case do
+      {:ok, _} ->
+        {:ok, %{tool: "send_email", status: "email_sent"}}
 
       {:error, reason} ->
-        {:error, "Failed to create email task: #{inspect(reason)}"}
+        {:error, "Failed to send email: #{inspect(reason)}"}
     end
   end
 

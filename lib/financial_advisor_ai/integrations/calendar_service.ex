@@ -89,8 +89,12 @@ defmodule FinancialAdvisorAi.Integrations.CalendarService do
     })
     |> case do
       {:ok, events} ->
+        IO.puts("Found #{length(events)} events from API")
+
         free_slots =
           calculate_free_slots(events, duration_minutes, preferred_times, user_timezone)
+
+        IO.puts("Generated #{length(free_slots)} free slots")
 
         {:ok, free_slots}
 
@@ -172,6 +176,7 @@ defmodule FinancialAdvisorAi.Integrations.CalendarService do
       :get ->
         query_string = URI.encode_query(params)
         full_url = if query_string != "", do: "#{url}?#{query_string}", else: url
+
         Req.get(full_url, headers: headers)
 
       :post ->
@@ -213,39 +218,59 @@ defmodule FinancialAdvisorAi.Integrations.CalendarService do
   end
 
   defp calculate_free_slots(events, duration_minutes, preferred_times, user_timezone) do
-    # Convert events to busy periods
+    # Get the current time range for filtering
+    now_utc = DateTime.utc_now()
+    end_time_utc = DateTime.add(now_utc, 7 * 24 * 60 * 60, :second)
+
+    # Convert events to busy periods - only include events within the next 7 days
     busy_periods =
       events
-      |> Enum.filter(fn event -> event["status"] != "cancelled" end)
-      |> Enum.map(fn event ->
-        start_time = get_in(event, ["start", "dateTime"]) || get_in(event, ["start", "date"])
-        end_time = get_in(event, ["end", "dateTime"]) || get_in(event, ["end", "date"])
-
-        {start_time, end_time}
+      |> Enum.filter(fn event ->
+        event["status"] != "cancelled" and Map.has_key?(event, "start") and
+          Map.has_key?(event, "end")
       end)
-      |> Enum.sort()
+      |> Enum.map(fn event ->
+        start_time_str = get_in(event, ["start", "dateTime"]) || get_in(event, ["start", "date"])
+        end_time_str = get_in(event, ["end", "dateTime"]) || get_in(event, ["end", "date"])
+
+        with {:ok, start_dt, _} <- DateTime.from_iso8601(start_time_str),
+             {:ok, end_dt, _} <- DateTime.from_iso8601(end_time_str) do
+          {convert_to_utc(start_dt), convert_to_utc(end_dt)}
+        else
+          _ -> nil
+        end
+      end)
+      |> Enum.reject(&is_nil/1)
+      |> Enum.filter(fn {start_utc, _end_utc} ->
+        DateTime.compare(start_utc, now_utc) != :lt and
+          DateTime.compare(start_utc, end_time_utc) != :gt
+      end)
+      |> Enum.sort_by(fn {start_utc, _} -> start_utc end)
 
     # Generate potential time slots based on preferred_times if provided, otherwise use business hours
-    # Ensure preferred_times is a list (handle nil case)
+    # Ensure preferred_times is a list (require nil case)
     preferred_times = preferred_times || []
 
     potential_slots =
-      if preferred_times != [] and length(preferred_times) > 0 do
+      if not Enum.empty?(preferred_times) do
         generate_slots_from_preferred_times(preferred_times, duration_minutes, user_timezone)
       else
         generate_business_hour_slots(duration_minutes, user_timezone)
       end
 
-    # Get current time for filtering out past slots
-    now_utc = DateTime.utc_now()
+    IO.puts("Generated #{length(potential_slots)} potential slots")
 
     # Filter out busy periods and past time slots
     free_slots =
       potential_slots
       |> Enum.reject(fn slot ->
-        Enum.any?(busy_periods, fn {busy_start, busy_end} ->
-          slots_overlap?(slot, {busy_start, busy_end})
-        end)
+        overlaps_with_busy =
+          Enum.any?(busy_periods, fn {busy_start, busy_end} ->
+            result = slots_overlap?(slot, {busy_start, busy_end})
+            result
+          end)
+
+        overlaps_with_busy
       end)
       |> Enum.filter(fn {start_time_utc, _end_time_utc, _start_time_user, _end_time_user} ->
         # Only include slots that are in the future (using UTC for consistent comparison)
@@ -456,16 +481,36 @@ defmodule FinancialAdvisorAi.Integrations.CalendarService do
   end
 
   defp slots_overlap?({slot_start_utc, slot_end_utc, _, _}, {busy_start, busy_end}) do
-    case {DateTime.from_iso8601(slot_start_utc), DateTime.from_iso8601(slot_end_utc),
-          DateTime.from_iso8601(busy_start), DateTime.from_iso8601(busy_end)} do
-      {{:ok, slot_start_dt, _}, {:ok, slot_end_dt, _}, {:ok, busy_start_dt, _},
-       {:ok, busy_end_dt, _}} ->
-        DateTime.compare(slot_start_dt, busy_end_dt) == :lt and
-          DateTime.compare(slot_end_dt, busy_start_dt) == :gt
+    # Parse slot times (which are ISO8601 strings) and normalize busy times (which are already DateTime objects)
+    case {DateTime.from_iso8601(slot_start_utc), DateTime.from_iso8601(slot_end_utc)} do
+      {{:ok, slot_start_dt, _}, {:ok, slot_end_dt, _}} ->
+        # Convert all times to UTC for consistent comparison
+        slot_start_utc_dt = convert_to_utc(slot_start_dt)
+        slot_end_utc_dt = convert_to_utc(slot_end_dt)
+
+        # busy_start and busy_end are already DateTime objects, just convert to UTC
+        busy_start_utc_dt = convert_to_utc(busy_start)
+        busy_end_utc_dt = convert_to_utc(busy_end)
+
+        # Check for overlap using UTC times
+        overlap_result =
+          DateTime.compare(slot_start_utc_dt, busy_end_utc_dt) == :lt and
+            DateTime.compare(slot_end_utc_dt, busy_start_utc_dt) == :gt
+
+        overlap_result
 
       _ ->
         # If we can't parse dates, assume no overlap
         false
+    end
+  end
+
+  # Helper function to safely convert DateTime to UTC
+  defp convert_to_utc(datetime) do
+    case DateTime.shift_zone(datetime, "UTC") do
+      {:ok, utc_datetime} -> utc_datetime
+      # Return original if conversion fails
+      {:error, _} -> datetime
     end
   end
 

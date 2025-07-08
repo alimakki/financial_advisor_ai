@@ -281,8 +281,6 @@ defmodule FinancialAdvisorAi.AI.Agent do
       [task | remaining_tasks] ->
         Logger.info("Processing task #{task.id} for user #{state.user_id}")
 
-        IO.inspect(task, label: "task")
-
         case execute_task(task, state) do
           {:ok, result} ->
             # Mark task as completed

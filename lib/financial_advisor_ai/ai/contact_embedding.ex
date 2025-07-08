@@ -18,7 +18,7 @@ defmodule FinancialAdvisorAi.AI.ContactEmbedding do
     # Combined content for embedding (without notes)
     field :content, :string
     field :embedding, Pgvector.Ecto.Vector
-    field :notes_processed, :boolean, default: false
+    field :notes_last_processed_at, :utc_datetime_usec
     field :metadata, :map, default: %{}
 
     belongs_to :user, FinancialAdvisorAi.Accounts.User
@@ -40,7 +40,7 @@ defmodule FinancialAdvisorAi.AI.ContactEmbedding do
       :lead_status,
       :content,
       :embedding,
-      :notes_processed,
+      :notes_last_processed_at,
       :metadata,
       :user_id
     ])

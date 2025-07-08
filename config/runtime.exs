@@ -50,7 +50,8 @@ if config_env() == :prod do
         url: database_url,
         pool_size: String.to_integer(System.get_env("DATABASE_POOL_SIZE") || "10"),
         stacktrace: true,
-        show_sensitive_data_on_connection_error: false
+        show_sensitive_data_on_connection_error: false,
+        types: FinancialAdvisorAi.PostgrexTypes
       ]
     else
       [
@@ -61,7 +62,8 @@ if config_env() == :prod do
         port: String.to_integer(System.get_env("DATABASE_PORT") || "5432"),
         pool_size: String.to_integer(System.get_env("DATABASE_POOL_SIZE") || "10"),
         stacktrace: true,
-        show_sensitive_data_on_connection_error: false
+        show_sensitive_data_on_connection_error: false,
+        types: FinancialAdvisorAi.PostgrexTypes
       ]
     end
 

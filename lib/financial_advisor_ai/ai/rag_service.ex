@@ -111,14 +111,21 @@ defmodule FinancialAdvisorAi.AI.RagService do
 
         if query_embedding do
           # Use PostgreSQL's vector similarity search with cosine distance
-          EmailEmbedding
-          |> where([e], e.user_id == ^user_id)
-          |> where([e], not is_nil(e.embedding))
-          |> where([e], cosine_distance(e.embedding, ^query_embedding) < 0.5)
-          |> order_by([e], cosine_distance(e.embedding, ^query_embedding))
-          |> limit(^limit)
-          |> Repo.all()
-          |> Enum.map(&format_email_result/1)
+          try do
+            EmailEmbedding
+            |> where([e], e.user_id == ^user_id)
+            |> where([e], not is_nil(e.embedding))
+            |> where([e], cosine_distance(e.embedding, ^query_embedding) < 0.5)
+            |> order_by([e], cosine_distance(e.embedding, ^query_embedding))
+            |> limit(^limit)
+            |> Repo.all()
+            |> Enum.map(&format_email_result/1)
+          rescue
+            e ->
+              require Logger
+              Logger.warn("Vector search failed, falling back to text search: #{inspect(e)}")
+              search_emails_by_content(user_id, query)
+          end
         else
           # Fallback to text search if embedding creation fails
           search_emails_by_content(user_id, query)

@@ -312,6 +312,7 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
     case DateTime.shift_zone(utc_time, user_timezone) do
       {:ok, user_time} ->
         Calendar.strftime(user_time, "%I:%M %p")
+
       {:error, _} ->
         # Fallback to UTC if timezone conversion fails
         Calendar.strftime(utc_time, "%I:%M %p")

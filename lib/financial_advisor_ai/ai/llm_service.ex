@@ -9,9 +9,8 @@ defmodule FinancialAdvisorAi.AI.LlmService do
   alias FinancialAdvisorAi.Integrations.CalendarService
 
   # @openai_api_url "https://api.openai.com/v1"
-  @default_model "gpt-4o-mini"
+  @default_model "gpt-4o"
   @embeddings_model "text-embedding-3-small"
-
   @doc """
   Generates an AI response based on user question and RAG context.
   Now always uses tool calling by default.
@@ -47,9 +46,13 @@ defmodule FinancialAdvisorAi.AI.LlmService do
   Generates a response with tool calling capabilities for task execution.
   """
   def generate_response_with_tools(user_question, rag_context, user_id, opts \\ []) do
+    # get timezone from user
+    user = FinancialAdvisorAi.Accounts.get_user!(user_id)
+    timezone = user.timezone
+
     model = Keyword.get(opts, :model, @default_model)
 
-    system_prompt = build_system_prompt_with_tools()
+    system_prompt = build_system_prompt_with_tools(timezone)
 
     # Build initial messages with conversation history
     initial_messages = build_messages_with_history(system_prompt, user_question, rag_context)
@@ -97,7 +100,9 @@ defmodule FinancialAdvisorAi.AI.LlmService do
     """
   end
 
-  defp build_system_prompt_with_tools do
+  defp build_system_prompt_with_tools(timezone) do
+    current_date = Date.utc_today() |> Date.to_string()
+
     """
     You are an AI Financial Advisor Assistant with tool calling capabilities. You can:
 
@@ -115,11 +120,16 @@ defmodule FinancialAdvisorAi.AI.LlmService do
     - create_task: Create a persistent task for follow-up
     - find_calendar_availability: Find available time slots in Google Calendar for scheduling meetings
 
+    Current date: #{current_date}
+    User timezone: #{timezone}
+
     When a user requests an action that requires tool usage, use the appropriate tools to complete the task.
     Always explain what you're doing and ask for confirmation before taking significant actions.
+    Be proactive with the tools at your disposal. For example, if a user has a message that is potentially actionable, suggest
+    useful options based on the tools available, for example, if there's some sort of lead, suggest potential meeting times based on calendar availability.
     Be conversational and helpful while being thorough in your explanations.
 
-    
+    When working with dates and scheduling, always consider the current date (#{current_date}) to provide relevant and timely suggestions.
     """
   end
 
@@ -326,7 +336,8 @@ defmodule FinancialAdvisorAi.AI.LlmService do
               preferred_times: %{
                 type: "array",
                 items: %{type: "string"},
-                description: "List of preferred meeting times to suggest"
+                description:
+                  "List of preferred meeting time ranges in ISO 8601 format. Each item should be a time range like 'YYYY-MM-DDTHH:MM:SSZ/YYYY-MM-DDTHH:MM:SSZ' (start/end format). Example: ['2024-01-15T11:00:00Z/2024-01-15T12:00:00Z']"
               }
             },
             required: ["client_email", "subject"]
@@ -600,13 +611,15 @@ defmodule FinancialAdvisorAi.AI.LlmService do
     client_email = Map.get(params, "client_email")
     subject = Map.get(params, "subject")
     duration_minutes = Map.get(params, "duration_minutes", 60)
+    preferred_times = Map.get(params, "preferred_times", [])
 
     # Use Calendar service to actually schedule the meeting
     case CalendarService.schedule_meeting_with_client(
            user_id,
            client_email,
            subject,
-           duration_minutes
+           duration_minutes,
+           preferred_times
          ) do
       {:ok, event} ->
         {:ok,
@@ -693,10 +706,14 @@ defmodule FinancialAdvisorAi.AI.LlmService do
   end
 
   defp execute_tool("find_calendar_availability", params, user_id) do
+    # Ensure preferred_times is always a list, defaulting to empty list if nil
+    preferred_times = params["preferred_times"] || []
+    duration_minutes = params["duration_minutes"] || 60
+
     case CalendarService.find_free_time(
            user_id,
-           params["duration_minutes"],
-           params["preferred_times"]
+           duration_minutes,
+           preferred_times
          ) do
       {:ok, availability} ->
         # Get user timezone for display purposes
@@ -715,12 +732,16 @@ defmodule FinancialAdvisorAi.AI.LlmService do
             }
           end)
 
-        {:ok, %{
-          tool: "find_calendar_availability",
-          availability: formatted_availability,
-          user_timezone: user_timezone,
-          total_slots: length(availability)
-        }}
+        {:ok,
+         %{
+           tool: "find_calendar_availability",
+           availability: formatted_availability,
+           user_timezone: user_timezone,
+           total_slots: length(availability)
+         }}
+
+      {:error, reason} ->
+        {:error, "Failed to find calendar availability: #{inspect(reason)}"}
     end
   end
 
@@ -780,7 +801,12 @@ defmodule FinancialAdvisorAi.AI.LlmService do
     "✅ Created task (ID: #{task_id}) for follow-up."
   end
 
-  defp format_success_result(%{tool: "find_calendar_availability", availability: availability, user_timezone: user_timezone, total_slots: total_slots}) do
+  defp format_success_result(%{
+         tool: "find_calendar_availability",
+         availability: availability,
+         user_timezone: user_timezone,
+         total_slots: total_slots
+       }) do
     if total_slots > 0 do
       formatted_availability =
         Enum.map_join(availability, "\n", fn slot ->

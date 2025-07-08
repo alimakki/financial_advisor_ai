@@ -150,9 +150,7 @@ defmodule FinancialAdvisorAi.Accounts.User do
   defp validate_timezone(changeset) do
     changeset
     |> validate_required([:timezone])
-    |> validate_inclusion(:timezone, get_valid_timezones(),
-      message: "is not a valid timezone"
-    )
+    |> validate_inclusion(:timezone, get_valid_timezones(), message: "is not a valid timezone")
   end
 
   # Common timezone list - in production, you might want to use a library like Tzdata

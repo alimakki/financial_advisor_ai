@@ -14,6 +14,7 @@ defmodule FinancialAdvisorAi.AI do
     Integration,
     EmailEmbedding
   }
+
   alias FinancialAdvisorAi.Integrations.TokenRefreshService
 
   # Conversations
@@ -176,12 +177,13 @@ defmodule FinancialAdvisorAi.AI do
   def refresh_all_expiring_tokens() do
     integrations = list_integrations_needing_refresh()
 
-    results = Enum.map(integrations, fn integration ->
-      case TokenRefreshService.refresh_if_needed(integration) do
-        {:ok, _updated} -> {:ok, integration.provider, integration.user_id}
-        {:error, reason} -> {:error, integration.provider, integration.user_id, reason}
-      end
-    end)
+    results =
+      Enum.map(integrations, fn integration ->
+        case TokenRefreshService.refresh_if_needed(integration) do
+          {:ok, _updated} -> {:ok, integration.provider, integration.user_id}
+          {:error, reason} -> {:error, integration.provider, integration.user_id, reason}
+        end
+      end)
 
     success_count = Enum.count(results, fn {status, _, _} -> status == :ok end)
     error_count = Enum.count(results, fn {status, _, _, _} -> status == :error end)

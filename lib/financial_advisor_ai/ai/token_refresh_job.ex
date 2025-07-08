@@ -65,7 +65,9 @@ defmodule FinancialAdvisorAi.AI.TokenRefreshJob do
 
     integrations_needing_refresh = get_integrations_needing_refresh()
 
-    Logger.info("Found #{length(integrations_needing_refresh)} integrations needing token refresh")
+    Logger.info(
+      "Found #{length(integrations_needing_refresh)} integrations needing token refresh"
+    )
 
     results = Enum.map(integrations_needing_refresh, &refresh_integration/1)
 
@@ -125,21 +127,33 @@ defmodule FinancialAdvisorAi.AI.TokenRefreshJob do
     case TokenRefreshService.refresh_if_needed(integration) do
       {:ok, updated_integration} ->
         if updated_integration.id != integration.id do
-          Logger.info("Successfully refreshed #{integration.provider} token for user #{integration.user_id}")
+          Logger.info(
+            "Successfully refreshed #{integration.provider} token for user #{integration.user_id}"
+          )
         end
+
         {:ok, updated_integration}
 
       {:error, :no_refresh_token} ->
-        Logger.warning("Cannot refresh #{integration.provider} token for user #{integration.user_id}: no refresh token available")
+        Logger.warning(
+          "Cannot refresh #{integration.provider} token for user #{integration.user_id}: no refresh token available"
+        )
+
         {:error, :no_refresh_token}
 
       {:error, :invalid_refresh_token} ->
-        Logger.error("Invalid refresh token for #{integration.provider} integration user #{integration.user_id} - requires re-authentication")
+        Logger.error(
+          "Invalid refresh token for #{integration.provider} integration user #{integration.user_id} - requires re-authentication"
+        )
+
         # Could potentially notify the user here
         {:error, :invalid_refresh_token}
 
       {:error, reason} ->
-        Logger.error("Failed to refresh #{integration.provider} token for user #{integration.user_id}: #{inspect(reason)}")
+        Logger.error(
+          "Failed to refresh #{integration.provider} token for user #{integration.user_id}: #{inspect(reason)}"
+        )
+
         {:error, reason}
     end
   end

@@ -210,12 +210,19 @@ defmodule FinancialAdvisorAi.Integrations.HubspotService do
     # Get all contacts that need notes processing
     contacts_needing_processing = get_contacts_needing_notes_processing(user_id)
 
-    IO.inspect(length(contacts_needing_processing), label: "found contacts needing notes processing")
+    IO.inspect(length(contacts_needing_processing),
+      label: "found contacts needing notes processing"
+    )
 
     # Process notes for each contact
     results =
       Enum.map(contacts_needing_processing, fn contact ->
-        case process_contact_notes_since_timestamp(user_id, contact.contact_id, contact.id, contact.notes_last_processed_at) do
+        case process_contact_notes_since_timestamp(
+               user_id,
+               contact.contact_id,
+               contact.id,
+               contact.notes_last_processed_at
+             ) do
           {:ok, processed_count} ->
             # Update the last processed timestamp
             update_contact_notes_processed_timestamp(contact)
@@ -385,14 +392,39 @@ defmodule FinancialAdvisorAi.Integrations.HubspotService do
   defp get_contact_notes(user_id, contact_id) do
     case get_hubspot_integration(user_id) do
       {:ok, integration} ->
+        # First get the note associations
         make_hubspot_request(
           integration,
           "/crm/v3/objects/contacts/#{contact_id}/associations/notes"
         )
-        |> IO.inspect(label: "get_contact_notes")
+        |> IO.inspect(label: "get_contact_notes_associations")
         |> case do
-          {:ok, response} -> {:ok, response["results"] || []}
-          error -> error
+          {:ok, response} ->
+            note_associations = response["results"] || []
+
+            # Extract note IDs from associations
+            note_ids = Enum.map(note_associations, fn association -> association["id"] end)
+
+            # Fetch actual note content for each note ID
+            notes =
+              Enum.map(note_ids, fn note_id ->
+                params = %{
+                  properties: "hs_note_body,createdAt,updatedAt",
+                  associations: "contact",
+                  archived: false
+                }
+
+                case make_hubspot_request(integration, "/crm/v3/objects/notes/#{note_id}", params) do
+                  {:ok, note_data} -> note_data
+                  {:error, _} -> nil
+                end
+              end)
+              |> Enum.reject(&is_nil/1)
+
+            {:ok, notes}
+
+          error ->
+            error
         end
 
       error ->
@@ -467,31 +499,38 @@ defmodule FinancialAdvisorAi.Integrations.HubspotService do
       # Process notes for this contact separately (notes will be processed later by the job)
       # We don't process notes here to avoid slowing down the contact import process
       if contact_embedding do
-        IO.puts("Contact #{contact.id} imported successfully - notes will be processed separately")
+        IO.puts(
+          "Contact #{contact.id} imported successfully - notes will be processed separately"
+        )
       end
     end)
   end
 
-  defp process_contact_notes_since_timestamp(user_id, contact_id, contact_embedding_id, last_processed_at) do
+  defp process_contact_notes_since_timestamp(
+         user_id,
+         contact_id,
+         contact_embedding_id,
+         _last_processed_at
+       ) do
     alias FinancialAdvisorAi.AI.LlmService
 
     # Fetch notes for this contact
     case get_contact_notes(user_id, contact_id) |> IO.inspect(label: "get_contact_notes") do
       {:ok, notes_data} ->
-        # Filter notes based on last_processed_at timestamp
-        notes_to_process = filter_notes_by_timestamp(notes_data, last_processed_at)
-
-        # Process each note separately
+        # Process each note - we'll check for duplicates by hubspot_note_id instead of timestamp filtering
         processed_count =
-          Enum.reduce(notes_to_process, 0, fn note_data, acc ->
-            # Extract note content
-            note_content =
+          Enum.reduce(notes_data, 0, fn note_data, acc ->
+            # Extract and clean note content
+            raw_note_content =
               case note_data["properties"] do
                 %{"hs_note_body" => body} -> body
                 _ -> ""
               end
 
-            # Only process if note has content
+            # Strip HTML tags and clean the content
+            note_content = clean_note_content(raw_note_content)
+
+            # Only process if note has content after cleaning
             if note_content != "" do
               # Check if note already exists to avoid duplicates
               hubspot_note_id = note_data["id"]
@@ -543,35 +582,34 @@ defmodule FinancialAdvisorAi.Integrations.HubspotService do
     end
   end
 
-  defp filter_notes_by_timestamp(notes_data, last_processed_at) do
-    if is_nil(last_processed_at) do
-      # If never processed, return all notes
-      notes_data
-    else
-      # Filter notes that were created or updated after the last processed timestamp
-      Enum.filter(notes_data, fn note_data ->
-        created_at = parse_hubspot_timestamp(note_data["createdAt"])
-        updated_at = parse_hubspot_timestamp(note_data["updatedAt"])
-
-        # Include note if it was created or updated after last processing
-        (created_at && DateTime.compare(created_at, last_processed_at) == :gt) ||
-        (updated_at && DateTime.compare(updated_at, last_processed_at) == :gt)
-      end)
-    end
-  end
-
-  defp parse_hubspot_timestamp(timestamp_str) when is_binary(timestamp_str) do
-    case DateTime.from_iso8601(timestamp_str) do
-      {:ok, datetime, _offset} -> datetime
-      _ -> nil
-    end
-  end
-
-  defp parse_hubspot_timestamp(_), do: nil
-
   defp update_contact_notes_processed_timestamp(contact) do
     FinancialAdvisorAi.AI.update_contact_embedding(contact, %{
       notes_last_processed_at: DateTime.utc_now()
     })
   end
+
+  # Helper function to clean HTML from note content
+  defp clean_note_content(content) when is_binary(content) do
+    content
+    # Convert common HTML entities to their characters
+    |> String.replace("&amp;", "&")
+    |> String.replace("&lt;", "<")
+    |> String.replace("&gt;", ">")
+    |> String.replace("&quot;", "\"")
+    |> String.replace("&apos;", "'")
+    |> String.replace("&nbsp;", " ")
+    # Add space before closing block tags to preserve word boundaries
+    |> String.replace(~r/<\/(p|div|br|h[1-6]|li|ul|ol|blockquote)>/i, " ")
+    # Add space for self-closing tags
+    |> String.replace(~r/<br\s*\/?>/, " ")
+    # Remove all remaining HTML tags
+    |> String.replace(~r/<[^>]*>/, "")
+    # Remove any remaining HTML entities
+    |> String.replace(~r/&[a-zA-Z0-9#]+;/, " ")
+    # Normalize whitespace (collapse multiple spaces/newlines into single space)
+    |> String.replace(~r/\s+/, " ")
+    |> String.trim()
+  end
+
+  defp clean_note_content(content), do: content
 end

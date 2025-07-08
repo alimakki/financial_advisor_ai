@@ -23,11 +23,13 @@ defmodule HubspotNotesProcessor do
 
     Enum.each(contacts_never_processed, fn contact ->
       full_name = build_contact_name(contact)
-      last_processed = if contact.notes_last_processed_at do
-        "Last processed: #{contact.notes_last_processed_at}"
-      else
-        "Never processed"
-      end
+
+      last_processed =
+        if contact.notes_last_processed_at do
+          "Last processed: #{contact.notes_last_processed_at}"
+        else
+          "Never processed"
+        end
 
       IO.puts("  • #{full_name}")
       IO.puts("    HubSpot ID: #{contact.contact_id}")
@@ -53,10 +55,12 @@ defmodule HubspotNotesProcessor do
 
         # Show processing results
         IO.puts("\n📊 Processing results:")
+
         Enum.each(results, fn {contact_id, result} ->
           case result do
             {:processed, note_count} ->
               IO.puts("  • Contact #{contact_id}: processed #{note_count} notes")
+
             {:error, reason} ->
               IO.puts("  • Contact #{contact_id}: error - #{inspect(reason)}")
           end

@@ -46,6 +46,7 @@ defmodule HubspotNotesWorkerTest do
 
     if length(unprocessed) > 0 do
       IO.puts("Sample unprocessed contacts:")
+
       unprocessed
       |> Enum.take(3)
       |> Enum.each(fn contact ->
@@ -81,6 +82,7 @@ defmodule HubspotNotesWorkerTest do
 
         if length(jobs) > 0 do
           IO.puts("Sample jobs:")
+
           jobs
           |> Enum.take(3)
           |> Enum.each(fn job ->
@@ -131,7 +133,6 @@ defmodule HubspotNotesWorkerTest do
       else
         IO.puts("  No recent jobs found")
       end
-
     rescue
       e ->
         IO.puts("⚠️  Could not query jobs (database not available): #{inspect(e)}")

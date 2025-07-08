@@ -42,7 +42,7 @@ defmodule FinancialAdvisorAi.AI.RagService do
           |> where([e], e.user_id == ^user_id)
           |> where([e], not is_nil(e.embedding))
           |> where([e], cosine_distance(e.embedding, ^query_embedding) < 0.5)
-          |> order_by([e], fragment("? <=> ?", e.embedding, ^query_embedding))
+          |> order_by([e], cosine_distance(e.embedding, ^query_embedding))
           |> limit(^limit)
           |> Repo.all()
           |> Enum.map(&format_email_result/1)
@@ -56,34 +56,6 @@ defmodule FinancialAdvisorAi.AI.RagService do
         search_emails_by_content(user_id, query)
     end
   end
-
-  # @doc """
-  # Searches for emails using vector similarity with a threshold.
-  # Only returns emails with similarity above the threshold.
-  # """
-  # def search_emails_by_vector_with_threshold(user_id, query, threshold \\ 0.8, limit \\ 10) do
-  #   case LlmService.create_embedding(query) do
-  #     {:ok, response} ->
-  #       query_embedding = get_in(response, ["data", Access.at(0), "embedding"])
-
-  #       if query_embedding do
-  #         # Use cosine distance with threshold
-  #         EmailEmbedding
-  #         |> where([e], e.user_id == ^user_id)
-  #         |> where([e], not is_nil(e.embedding))
-  #         |> where([e], fragment("1 - (? <=> ?) > ?", e.embedding, ^query_embedding, ^threshold))
-  #         |> order_by([e], fragment("? <=> ?", e.embedding, ^query_embedding))
-  #         |> limit(^limit)
-  #         |> Repo.all()
-  #         |> Enum.map(&format_email_result/1)
-  #       else
-  #         []
-  #       end
-
-  #     {:error, _} ->
-  #       []
-  #   end
-  # end
 
   @doc """
   Processes and stores email content for RAG search.
@@ -129,21 +101,7 @@ defmodule FinancialAdvisorAi.AI.RagService do
   Now uses vector search for better semantic matching.
   """
   def search_by_question_type(user_id, question) do
-    question_lower = String.downcase(question)
-
-    cond do
-      contains_family_keywords?(question_lower) ->
-        search_family_mentions_vector(user_id, question)
-
-      contains_stock_keywords?(question_lower) ->
-        search_stock_mentions_vector(user_id, question)
-
-      contains_meeting_keywords?(question_lower) ->
-        search_meeting_mentions_vector(user_id, question)
-
-      true ->
-        search_context(user_id, question)
-    end
+    search_context(user_id, question)
   end
 
   # Private functions
@@ -181,72 +139,6 @@ defmodule FinancialAdvisorAi.AI.RagService do
     })
     |> limit(5)
     |> Repo.all()
-  end
-
-  defp search_family_mentions_vector(user_id, query) do
-    # Use vector search with family-related context
-    family_query = "#{query} family children kids baseball soccer school activities"
-
-    results = search_emails_by_vector(user_id, family_query, 15)
-
-    %{
-      emails: results,
-      contacts: [],
-      summary:
-        "Found #{length(results)} emails mentioning family-related topics using semantic search"
-    }
-  end
-
-  defp search_stock_mentions_vector(user_id, query) do
-    # Use vector search with investment-related context
-    stock_query = "#{query} stock investment portfolio market trading finance"
-
-    results = search_emails_by_vector(user_id, stock_query, 10)
-
-    %{
-      emails: results,
-      contacts: [],
-      summary: "Found #{length(results)} emails about stocks or investments using semantic search"
-    }
-  end
-
-  defp search_meeting_mentions_vector(user_id, query) do
-    # Use vector search with meeting-related context
-    meeting_query = "#{query} meeting appointment schedule calendar call conference"
-
-    results = search_emails_by_vector(user_id, meeting_query, 10)
-
-    %{
-      emails: results,
-      contacts: [],
-      summary:
-        "Found #{length(results)} emails about meetings or scheduling using semantic search"
-    }
-  end
-
-  defp contains_family_keywords?(question) do
-    family_keywords = [
-      "kid",
-      "child",
-      "son",
-      "daughter",
-      "family",
-      "baseball",
-      "soccer",
-      "school"
-    ]
-
-    Enum.any?(family_keywords, &String.contains?(question, &1))
-  end
-
-  defp contains_stock_keywords?(question) do
-    stock_keywords = ["stock", "aapl", "investment", "portfolio", "sell", "buy"]
-    Enum.any?(stock_keywords, &String.contains?(question, &1))
-  end
-
-  defp contains_meeting_keywords?(question) do
-    meeting_keywords = ["meeting", "appointment", "schedule", "calendar"]
-    Enum.any?(meeting_keywords, &String.contains?(question, &1))
   end
 
   defp extract_email_content(email_data) do

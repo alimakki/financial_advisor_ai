@@ -113,10 +113,13 @@ defmodule FinancialAdvisorAi.AI.LlmService do
     - create_contact: Create a new contact in the CRM
     - send_email: Send an email to a client or contact
     - create_task: Create a persistent task for follow-up
+    - find_calendar_availability: Find available time slots in Google Calendar for scheduling meetings
 
     When a user requests an action that requires tool usage, use the appropriate tools to complete the task.
     Always explain what you're doing and ask for confirmation before taking significant actions.
     Be conversational and helpful while being thorough in your explanations.
+
+    
     """
   end
 

@@ -87,7 +87,6 @@ defmodule FinancialAdvisorAi.Integrations.CalendarService do
       singleEvents: true,
       orderBy: "startTime"
     })
-    |> IO.inspect(label: "list_events")
     |> case do
       {:ok, events} ->
         IO.puts("Found #{length(events)} events from API")
@@ -247,24 +246,16 @@ defmodule FinancialAdvisorAi.Integrations.CalendarService do
           DateTime.compare(start_utc, end_time_utc) != :gt
       end)
       |> Enum.sort_by(fn {start_utc, _} -> start_utc end)
-      |> IO.inspect(label: "busy_periods")
-
-    # Log filtered busy periods count
-    IO.puts("Filtered to #{length(busy_periods)} busy periods within time range")
 
     # Generate potential time slots based on preferred_times if provided, otherwise use business hours
     # Ensure preferred_times is a list (require nil case)
     preferred_times = preferred_times || []
 
-    IO.inspect(preferred_times, label: "preferred times")
-
     potential_slots =
       if not Enum.empty?(preferred_times) do
         generate_slots_from_preferred_times(preferred_times, duration_minutes, user_timezone)
-        |> IO.inspect(label: "preferred_times_slots")
       else
         generate_business_hour_slots(duration_minutes, user_timezone)
-        |> IO.inspect(label: "business_hour_slots")
       end
 
     IO.puts("Generated #{length(potential_slots)} potential slots")

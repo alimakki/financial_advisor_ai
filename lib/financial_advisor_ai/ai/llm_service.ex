@@ -538,7 +538,7 @@ defmodule FinancialAdvisorAi.AI.LlmService do
         {:ok, content || "I apologize, but I couldn't generate a response at this time."}
 
       tool_calls ->
-        IO.inspect(tool_calls, label: "tool_calls")
+        # IO.inspect(tool_calls, label: "tool_calls")
         # Process tool calls and send results back to LLM
         execute_tool_calls_and_get_response(
           tool_calls,
@@ -558,7 +558,7 @@ defmodule FinancialAdvisorAi.AI.LlmService do
          initial_messages
        ) do
     # Execute all tool calls
-    tool_results = execute_tool_calls(tool_calls, user_id) |> IO.inspect(label: "tool_results")
+    tool_results = execute_tool_calls(tool_calls, user_id)
 
     # Always send results to LLM, even if some tools failed
     # The LLM can handle the error messages and provide a helpful response
@@ -811,8 +811,7 @@ defmodule FinancialAdvisorAi.AI.LlmService do
            user_id,
            duration_minutes,
            preferred_times
-         )
-         |> IO.inspect(label: "find_free_time") do
+         ) do
       {:ok, availability} ->
         # Get user timezone for display purposes
         user = FinancialAdvisorAi.Accounts.get_user!(user_id)

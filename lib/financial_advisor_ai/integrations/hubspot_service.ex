@@ -160,7 +160,7 @@ defmodule FinancialAdvisorAi.Integrations.HubspotService do
   end
 
   @doc """
-  Polls for new or updated HubSpot contacts and notes for the given user_id,
+  Polls for new HubSpot contacts and notes for the given user_id,
   imports them into the contact_embeddings table, and updates the last seen
   timestamp in the integration metadata.
   """
@@ -197,6 +197,59 @@ defmodule FinancialAdvisorAi.Integrations.HubspotService do
     else
       error -> error
     end
+  end
+
+  @doc """
+  Processes notes for contacts, checking for new notes since the last processing time.
+  This approach handles both contacts that have never had notes processed and
+  contacts that might have new notes since their last processing.
+  """
+  def process_contact_notes(user_id) do
+    IO.inspect(user_id, label: "processing contact notes for user_id #{user_id}")
+
+    # Get all contacts that need notes processing
+    contacts_needing_processing = get_contacts_needing_notes_processing(user_id)
+
+    IO.inspect(length(contacts_needing_processing), label: "found contacts needing notes processing")
+
+    # Process notes for each contact
+    results =
+      Enum.map(contacts_needing_processing, fn contact ->
+        case process_contact_notes_since_timestamp(user_id, contact.contact_id, contact.id, contact.notes_last_processed_at) do
+          {:ok, processed_count} ->
+            # Update the last processed timestamp
+            update_contact_notes_processed_timestamp(contact)
+            {contact.contact_id, {:processed, processed_count}}
+
+          {:error, reason} ->
+            {contact.contact_id, {:error, reason}}
+        end
+      end)
+
+    processed_count =
+      results
+      |> Enum.filter(fn {_contact_id, result} ->
+        case result do
+          {:processed, _} -> true
+          _ -> false
+        end
+      end)
+      |> length()
+
+    {:ok, %{processed_count: processed_count, results: results}}
+  end
+
+  @doc """
+  Gets contacts that need their notes processed.
+  This includes all contacts to check for new notes, not just unprocessed ones.
+  """
+  def get_contacts_needing_notes_processing(user_id) do
+    import Ecto.Query
+
+    FinancialAdvisorAi.AI.ContactEmbedding
+    |> where([c], c.user_id == ^user_id)
+    |> order_by([c], desc: c.inserted_at)
+    |> FinancialAdvisorAi.Repo.all()
   end
 
   defp get_hubspot_integration(user_id) do
@@ -336,6 +389,7 @@ defmodule FinancialAdvisorAi.Integrations.HubspotService do
           integration,
           "/crm/v3/objects/contacts/#{contact_id}/associations/notes"
         )
+        |> IO.inspect(label: "get_contact_notes")
         |> case do
           {:ok, response} -> {:ok, response["results"] || []}
           error -> error
@@ -386,7 +440,7 @@ defmodule FinancialAdvisorAi.Integrations.HubspotService do
         lead_status: contact.lead_status,
         content: contact.content,
         embedding: embedding,
-        notes_processed: false,
+        notes_last_processed_at: nil,
         metadata: %{
           created_at: contact.created_at,
           updated_at: contact.updated_at,
@@ -410,86 +464,114 @@ defmodule FinancialAdvisorAi.Integrations.HubspotService do
             end
         end
 
-      # Now process notes separately if contact embedding was created/updated successfully
+      # Process notes for this contact separately (notes will be processed later by the job)
+      # We don't process notes here to avoid slowing down the contact import process
       if contact_embedding do
-        process_contact_notes(user_id, contact.id, contact_embedding.id)
+        IO.puts("Contact #{contact.id} imported successfully - notes will be processed separately")
       end
     end)
   end
 
-  defp process_contact_notes(user_id, contact_id, contact_embedding_id) do
+  defp process_contact_notes_since_timestamp(user_id, contact_id, contact_embedding_id, last_processed_at) do
     alias FinancialAdvisorAi.AI.LlmService
 
     # Fetch notes for this contact
     case get_contact_notes(user_id, contact_id) |> IO.inspect(label: "get_contact_notes") do
       {:ok, notes_data} ->
+        # Filter notes based on last_processed_at timestamp
+        notes_to_process = filter_notes_by_timestamp(notes_data, last_processed_at)
+
         # Process each note separately
-        Enum.each(notes_data, fn note_data ->
-          # Extract note content
-          note_content =
-            case note_data["properties"] do
-              %{"hs_note_body" => body} -> body
-              _ -> ""
-            end
+        processed_count =
+          Enum.reduce(notes_to_process, 0, fn note_data, acc ->
+            # Extract note content
+            note_content =
+              case note_data["properties"] do
+                %{"hs_note_body" => body} -> body
+                _ -> ""
+              end
 
-          # Only process if note has content
-          if note_content != "" do
-            # Check if note already exists to avoid duplicates
-            hubspot_note_id = note_data["id"]
+            # Only process if note has content
+            if note_content != "" do
+              # Check if note already exists to avoid duplicates
+              hubspot_note_id = note_data["id"]
 
-            existing_note =
-              FinancialAdvisorAi.AI.get_contact_note_by_hubspot_id(user_id, hubspot_note_id)
+              existing_note =
+                FinancialAdvisorAi.AI.get_contact_note_by_hubspot_id(user_id, hubspot_note_id)
 
-            if is_nil(existing_note) do
-              # Generate embedding for the note content
-              embedding =
-                case LlmService.create_embedding(note_content) do
-                  {:ok, response} ->
-                    get_in(response, ["data", Access.at(0), "embedding"])
+              if is_nil(existing_note) do
+                # Generate embedding for the note content
+                embedding =
+                  case LlmService.create_embedding(note_content) do
+                    {:ok, response} ->
+                      get_in(response, ["data", Access.at(0), "embedding"])
 
-                  {:error, _} ->
-                    nil
-                end
+                    {:error, _} ->
+                      nil
+                  end
 
-              # Create contact note record
-              note_attrs = %{
-                user_id: user_id,
-                contact_embedding_id: contact_embedding_id,
-                hubspot_note_id: hubspot_note_id,
-                content: note_content,
-                embedding: embedding,
-                metadata: %{
-                  created_at: note_data["createdAt"],
-                  updated_at: note_data["updatedAt"],
-                  processed_at: DateTime.utc_now()
+                # Create contact note record
+                note_attrs = %{
+                  user_id: user_id,
+                  contact_embedding_id: contact_embedding_id,
+                  hubspot_note_id: hubspot_note_id,
+                  content: note_content,
+                  embedding: embedding,
+                  metadata: %{
+                    created_at: note_data["createdAt"],
+                    updated_at: note_data["updatedAt"],
+                    processed_at: DateTime.utc_now()
+                  }
                 }
-              }
 
-              FinancialAdvisorAi.AI.create_contact_note(note_attrs)
+                case FinancialAdvisorAi.AI.create_contact_note(note_attrs) do
+                  {:ok, _} -> acc + 1
+                  {:error, _} -> acc
+                end
+              else
+                acc
+              end
+            else
+              acc
             end
-          end
-        end)
+          end)
 
-        # Mark contact as having notes processed
-        contact_embedding =
-          FinancialAdvisorAi.AI.get_contact_embedding_by_contact_id(user_id, contact_id)
+        {:ok, processed_count}
 
-        if contact_embedding do
-          FinancialAdvisorAi.AI.update_contact_embedding(contact_embedding, %{
-            notes_processed: true
-          })
-        end
-
-      {:error, _} ->
-        # If we can't fetch notes, still mark as processed to avoid retrying
-        contact_embedding =
-          FinancialAdvisorAi.AI.get_contact_embedding_by_contact_id(user_id, contact_id)
-
-        if contact_embedding do
-          FinancialAdvisorAi.AI.update_contact_embedding(contact_embedding, %{
-            notes_processed: true
-          })
-        end
+      {:error, reason} ->
+        {:error, "Failed to fetch notes for contact #{contact_id}: #{inspect(reason)}"}
     end
+  end
+
+  defp filter_notes_by_timestamp(notes_data, last_processed_at) do
+    if is_nil(last_processed_at) do
+      # If never processed, return all notes
+      notes_data
+    else
+      # Filter notes that were created or updated after the last processed timestamp
+      Enum.filter(notes_data, fn note_data ->
+        created_at = parse_hubspot_timestamp(note_data["createdAt"])
+        updated_at = parse_hubspot_timestamp(note_data["updatedAt"])
+
+        # Include note if it was created or updated after last processing
+        (created_at && DateTime.compare(created_at, last_processed_at) == :gt) ||
+        (updated_at && DateTime.compare(updated_at, last_processed_at) == :gt)
+      end)
+    end
+  end
+
+  defp parse_hubspot_timestamp(timestamp_str) when is_binary(timestamp_str) do
+    case DateTime.from_iso8601(timestamp_str) do
+      {:ok, datetime, _offset} -> datetime
+      _ -> nil
+    end
+  end
+
+  defp parse_hubspot_timestamp(_), do: nil
+
+  defp update_contact_notes_processed_timestamp(contact) do
+    FinancialAdvisorAi.AI.update_contact_embedding(contact, %{
+      notes_last_processed_at: DateTime.utc_now()
+    })
   end
 end

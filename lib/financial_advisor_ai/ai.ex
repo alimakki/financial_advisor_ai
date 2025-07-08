@@ -202,6 +202,18 @@ defmodule FinancialAdvisorAi.AI do
     }
   end
 
+  @doc """
+  Lists users that have integrations with a specific provider.
+  """
+  def list_users_with_integrations(provider) do
+    Integration
+    |> where([i], i.provider == ^provider)
+    |> join(:inner, [i], u in assoc(i, :user))
+    |> select([i, u], u)
+    |> Repo.all()
+    |> Enum.uniq_by(& &1.id)
+  end
+
   # Email Embeddings
 
   def create_email_embedding(attrs \\ %{}) do
@@ -295,5 +307,39 @@ defmodule FinancialAdvisorAi.AI do
     |> where([n], n.user_id == ^user_id)
     |> where([n], ilike(n.content, ^"%#{query}%"))
     |> Repo.all()
+  end
+
+  @doc """
+  Lists contacts that need their notes processed.
+  This includes contacts that have never had their notes processed (notes_last_processed_at is null)
+  or contacts that might have new notes since their last processing.
+  """
+  def list_contacts_needing_notes_processing(user_id) do
+    ContactEmbedding
+    |> where([c], c.user_id == ^user_id)
+    |> where([c], is_nil(c.notes_last_processed_at))
+    |> order_by([c], desc: c.inserted_at)
+    |> Repo.all()
+  end
+
+  @doc """
+  Lists all contacts for a user, regardless of their note processing status.
+  This can be used to check for new notes on all contacts.
+  """
+  def list_all_contacts_for_notes_processing(user_id) do
+    ContactEmbedding
+    |> where([c], c.user_id == ^user_id)
+    |> order_by([c], desc: c.inserted_at)
+    |> Repo.all()
+  end
+
+  @doc """
+  Process notes for contacts that need their notes processed.
+  This is now a more comprehensive approach that can handle both new contacts
+  and contacts with potentially new notes.
+  """
+  def process_contact_notes(user_id) do
+    alias FinancialAdvisorAi.Integrations.HubspotService
+    HubspotService.process_contact_notes(user_id)
   end
 end

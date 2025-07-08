@@ -25,7 +25,8 @@ defmodule FinancialAdvisorAi.Application do
       # Start to serve requests, typically the last entry
       FinancialAdvisorAiWeb.Endpoint,
       FinancialAdvisorAi.AI.PollingWorker,
-      FinancialAdvisorAi.AI.TokenRefreshScheduler
+      FinancialAdvisorAi.AI.TokenRefreshScheduler,
+      FinancialAdvisorAi.AI.HubspotNotesScheduler
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html

@@ -9,11 +9,11 @@ defmodule FinancialAdvisorAi.Repo.Migrations.ModifyContactEmbeddingsTable do
       # Update content field to not include notes
       modify :content, :text, null: false
 
-      # Add a flag to indicate if notes have been processed separately
-      add :notes_processed, :boolean, default: false
+      # Add timestamp to track when notes were last processed
+      add :notes_last_processed_at, :utc_datetime_usec
     end
 
-    # Add index for the new flag
-    create index(:contact_embeddings, [:notes_processed])
+    # Add index for the new timestamp field
+    create index(:contact_embeddings, [:notes_last_processed_at])
   end
 end

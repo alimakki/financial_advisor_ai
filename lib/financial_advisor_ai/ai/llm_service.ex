@@ -175,11 +175,21 @@ defmodule FinancialAdvisorAi.AI.LlmService do
   defp build_context_section(rag_context) do
     emails = Map.get(rag_context, :emails, [])
     contacts = Map.get(rag_context, :contacts, [])
+    hubspot_contacts = Map.get(rag_context, :hubspot_contacts, [])
+    contact_notes = Map.get(rag_context, :contact_notes, [])
 
-    if (emails == [] or is_nil(emails)) and (contacts == [] or is_nil(contacts)) do
+    if (emails == [] or is_nil(emails)) and
+         (contacts == [] or is_nil(contacts)) and
+         (hubspot_contacts == [] or is_nil(hubspot_contacts)) and
+         (contact_notes == [] or is_nil(contact_notes)) do
       ""
     else
-      [build_email_context(emails), build_contact_context(contacts)]
+      [
+        build_email_context(emails),
+        build_contact_context(contacts),
+        build_hubspot_contact_context(hubspot_contacts),
+        build_contact_note_context(contact_notes)
+      ]
       |> Enum.reject(&(&1 == ""))
       |> Enum.join("\n")
     end
@@ -205,6 +215,29 @@ defmodule FinancialAdvisorAi.AI.LlmService do
       end)
 
     "\nRelevant Contacts:\n#{contact_summaries}"
+  end
+
+  defp build_hubspot_contact_context([]), do: ""
+
+  defp build_hubspot_contact_context(hubspot_contacts) do
+    contact_summaries =
+      Enum.map_join(hubspot_contacts, "\n", fn contact ->
+        company_info = if contact.company, do: " - #{contact.company}", else: ""
+        "- #{contact.name} (#{contact.email})#{company_info}: #{contact.lifecycle_stage}"
+      end)
+
+    "\nRelevant HubSpot Contacts:\n#{contact_summaries}"
+  end
+
+  defp build_contact_note_context([]), do: ""
+
+  defp build_contact_note_context(contact_notes) do
+    note_summaries =
+      Enum.map_join(contact_notes, "\n", fn note ->
+        "- Note: #{note.content_preview}"
+      end)
+
+    "\nRelevant Contact Notes:\n#{note_summaries}"
   end
 
   defp openai_api_url do
@@ -743,6 +776,18 @@ defmodule FinancialAdvisorAi.AI.LlmService do
       {:ok, contact} ->
         {:ok, %{tool: "create_contact", contact_id: contact.id, status: "contact_created"}}
 
+      {:error, {409, %{"message" => message}}} ->
+        # Contact already exists - extract existing ID if possible
+        existing_id = extract_existing_contact_id_from_message(message)
+
+        {:ok,
+         %{
+           tool: "create_contact",
+           contact_id: existing_id,
+           status: "contact_already_exists",
+           message: "Contact already exists in HubSpot"
+         }}
+
       {:error, reason} ->
         {:error, "Failed to create contact: #{inspect(reason)}"}
     end
@@ -848,6 +893,22 @@ defmodule FinancialAdvisorAi.AI.LlmService do
     "✅ Created email task (ID: #{task_id}). I'll send the email for you."
   end
 
+  defp format_success_result(%{
+         tool: "create_contact",
+         status: "contact_created",
+         contact_id: contact_id
+       }) do
+    "✅ Contact created successfully! Contact ID: #{contact_id}"
+  end
+
+  defp format_success_result(%{
+         tool: "create_contact",
+         status: "contact_already_exists",
+         contact_id: contact_id
+       }) do
+    "✅ Contact already exists in HubSpot! Contact ID: #{contact_id}"
+  end
+
   defp format_success_result(%{tool: "create_contact", task_id: task_id}) do
     "✅ Created contact creation task (ID: #{task_id}). I'll add them to your CRM."
   end
@@ -903,4 +964,13 @@ defmodule FinancialAdvisorAi.AI.LlmService do
   end
 
   defp strip_think_tags(text), do: text
+
+  defp extract_existing_contact_id_from_message(message) when is_binary(message) do
+    case Regex.run(~r/Existing ID: (\d+)/, message) do
+      [_, contact_id] -> contact_id
+      _ -> nil
+    end
+  end
+
+  defp extract_existing_contact_id_from_message(_), do: nil
 end

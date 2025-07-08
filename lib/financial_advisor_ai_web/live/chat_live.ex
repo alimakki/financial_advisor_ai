@@ -650,7 +650,7 @@ defmodule FinancialAdvisorAiWeb.ChatLive do
             <div class="mt-4 pt-4 border-t border-gray-600">
               <.link
                 href={~p"/users/log-out"}
-                method={:delete}
+                method="delete"
                 class="w-full flex items-center justify-center space-x-2 px-4 py-2 text-sm font-medium text-gray-300 financial-card hover:text-gray-200 transition-colors"
                 data-confirm="Are you sure you want to log out?"
               >

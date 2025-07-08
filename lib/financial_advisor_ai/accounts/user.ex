@@ -11,6 +11,7 @@ defmodule FinancialAdvisorAi.Accounts.User do
     field :hashed_password, :string, redact: true
     field :confirmed_at, :utc_datetime
     field :authenticated_at, :utc_datetime, virtual: true
+    field :timezone, :string, default: "UTC"
 
     timestamps()
   end
@@ -28,8 +29,9 @@ defmodule FinancialAdvisorAi.Accounts.User do
   """
   def email_changeset(user, attrs, opts \\ []) do
     user
-    |> cast(attrs, [:id, :email])
+    |> cast(attrs, [:id, :email, :timezone])
     |> validate_email(opts)
+    |> validate_timezone()
   end
 
   defp validate_email(changeset, opts) do
@@ -134,5 +136,57 @@ defmodule FinancialAdvisorAi.Accounts.User do
   def valid_password?(_, _) do
     Bcrypt.no_user_verify()
     false
+  end
+
+  @doc """
+  A user changeset for updating timezone.
+  """
+  def timezone_changeset(user, attrs \\ %{}) do
+    user
+    |> cast(attrs, [:timezone])
+    |> validate_timezone()
+  end
+
+  defp validate_timezone(changeset) do
+    changeset
+    |> validate_required([:timezone])
+    |> validate_inclusion(:timezone, get_valid_timezones(),
+      message: "is not a valid timezone"
+    )
+  end
+
+  # Common timezone list - in production, you might want to use a library like Tzdata
+  defp get_valid_timezones do
+    [
+      "UTC",
+      "America/New_York",
+      "America/Chicago",
+      "America/Denver",
+      "America/Los_Angeles",
+      "America/Phoenix",
+      "America/Anchorage",
+      "America/Honolulu",
+      "America/Toronto",
+      "America/Vancouver",
+      "Europe/London",
+      "Europe/Paris",
+      "Europe/Berlin",
+      "Europe/Rome",
+      "Europe/Madrid",
+      "Europe/Amsterdam",
+      "Europe/Stockholm",
+      "Europe/Zurich",
+      "Asia/Tokyo",
+      "Asia/Shanghai",
+      "Asia/Hong_Kong",
+      "Asia/Singapore",
+      "Asia/Seoul",
+      "Asia/Mumbai",
+      "Asia/Dubai",
+      "Australia/Sydney",
+      "Australia/Melbourne",
+      "Australia/Perth",
+      "Pacific/Auckland"
+    ]
   end
 end

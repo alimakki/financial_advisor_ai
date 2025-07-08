@@ -7,6 +7,9 @@
 # General application configuration
 import Config
 
+# Configure timezone database
+config :elixir, :time_zone_database, Tzdata.TimeZoneDatabase
+
 config :financial_advisor_ai, :scopes,
   user: [
     default: true,

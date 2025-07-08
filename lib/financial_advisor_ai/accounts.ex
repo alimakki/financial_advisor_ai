@@ -330,4 +330,20 @@ defmodule FinancialAdvisorAi.Accounts do
   end
 
   def get_or_create_user_from_google(_), do: {:error, :invalid_user_info}
+
+  @doc """
+  Updates a user's timezone.
+
+  ## Examples
+      iex> update_user_timezone(user, %{timezone: "America/New_York"})
+      {:ok, %User{}}
+
+      iex> update_user_timezone(user, %{timezone: "invalid"})
+      {:error, %Ecto.Changeset{}}
+  """
+  def update_user_timezone(user, attrs) do
+    user
+    |> User.timezone_changeset(attrs)
+    |> Repo.update()
+  end
 end

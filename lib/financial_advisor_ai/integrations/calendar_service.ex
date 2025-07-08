@@ -66,8 +66,16 @@ defmodule FinancialAdvisorAi.Integrations.CalendarService do
     end
   end
 
+  @doc """
+  Finds free time slots for the given user, considering their timezone.
+  Returns a list of available time slots in the user's timezone.
+  """
   def find_free_time(user_id, duration_minutes, preferred_times \\ []) do
-    # Get events for the next 7 days
+    # Get user to access their timezone
+    user = FinancialAdvisorAi.Accounts.get_user!(user_id)
+    user_timezone = user.timezone || "UTC"
+
+    # Get events for the next 7 days (in UTC)
     start_time = DateTime.utc_now() |> DateTime.to_iso8601()
 
     end_time =
@@ -81,7 +89,7 @@ defmodule FinancialAdvisorAi.Integrations.CalendarService do
     })
     |> case do
       {:ok, events} ->
-        free_slots = calculate_free_slots(events, duration_minutes, preferred_times)
+        free_slots = calculate_free_slots(events, duration_minutes, preferred_times, user_timezone)
         {:ok, free_slots}
 
       {:error, _} ->
@@ -102,16 +110,16 @@ defmodule FinancialAdvisorAi.Integrations.CalendarService do
         {:error, :no_available_slots}
 
       {:ok, [best_slot | _other_slots]} ->
-        # Create the meeting event
+        # Create the meeting event - times are already in UTC from find_free_time
         event_data = %{
           summary: subject,
           description: "Meeting scheduled via AI Financial Advisor",
           start: %{
-            dateTime: best_slot.start_time,
+            dateTime: best_slot.start_time_utc,
             timeZone: "UTC"
           },
           end: %{
-            dateTime: best_slot.end_time,
+            dateTime: best_slot.end_time_utc,
             timeZone: "UTC"
           },
           attendees: [
@@ -202,7 +210,7 @@ defmodule FinancialAdvisorAi.Integrations.CalendarService do
     }
   end
 
-  defp calculate_free_slots(events, duration_minutes, _preferred_times) do
+  defp calculate_free_slots(events, duration_minutes, _preferred_times, user_timezone) do
     # Convert events to busy periods
     busy_periods =
       events
@@ -215,8 +223,8 @@ defmodule FinancialAdvisorAi.Integrations.CalendarService do
       end)
       |> Enum.sort()
 
-    # Generate potential time slots (business hours: 9 AM - 5 PM)
-    potential_slots = generate_business_hour_slots(duration_minutes)
+    # Generate potential time slots (business hours: 9 AM - 5 PM in user's timezone)
+    potential_slots = generate_business_hour_slots(duration_minutes, user_timezone)
 
     # Filter out busy periods
     free_slots =
@@ -226,11 +234,14 @@ defmodule FinancialAdvisorAi.Integrations.CalendarService do
           slots_overlap?(slot, {busy_start, busy_end})
         end)
       end)
-      |> Enum.map(fn {start_time, end_time} ->
+      |> Enum.map(fn {start_time_utc, end_time_utc, start_time_user, end_time_user} ->
         %{
-          start_time: start_time,
-          end_time: end_time,
-          duration_minutes: duration_minutes
+          start_time: start_time_user,           # Display time in user's timezone
+          end_time: end_time_user,               # Display time in user's timezone
+          start_time_utc: start_time_utc,        # UTC time for API calls
+          end_time_utc: end_time_utc,            # UTC time for API calls
+          duration_minutes: duration_minutes,
+          timezone: user_timezone
         }
       end)
       # Return top 5 available slots
@@ -239,50 +250,86 @@ defmodule FinancialAdvisorAi.Integrations.CalendarService do
     free_slots
   end
 
-  defp generate_business_hour_slots(duration_minutes) do
-    # Generate slots for the next 7 days during business hours (9 AM - 5 PM)
+  defp generate_business_hour_slots(duration_minutes, user_timezone) do
+    # Generate slots for the next 7 days during business hours (9 AM - 5 PM in user's timezone)
     now = DateTime.utc_now()
 
     0..6
     |> Enum.flat_map(fn day_offset ->
       day = DateTime.add(now, day_offset * 24 * 60 * 60, :second)
 
-      generate_day_slots(day, duration_minutes)
+      generate_day_slots(day, duration_minutes, user_timezone)
     end)
   end
 
-  defp generate_day_slots(day, duration_minutes) do
-    # Skip weekends
-    if Date.day_of_week(DateTime.to_date(day)) in [6, 7] do
+  defp generate_day_slots(day, duration_minutes, user_timezone) do
+    # Convert UTC day to user's timezone to check day of week
+    user_day = convert_utc_to_timezone(day, user_timezone)
+
+    # Skip weekends (in user's timezone)
+    if Date.day_of_week(DateTime.to_date(user_day)) in [6, 7] do
       []
     else
-      # Generate hourly slots from 9 AM to 5 PM
+      # Generate hourly slots from 9 AM to 5 PM in user's timezone
       9..16
       |> Enum.map(fn hour ->
-        calculate_start_end_times(day, hour, duration_minutes)
+        calculate_start_end_times(user_day, hour, duration_minutes, user_timezone)
       end)
     end
   end
 
-  defp calculate_start_end_times(day, hour, duration_minutes) do
-    start_time =
-      day
-      |> DateTime.to_date()
-      |> DateTime.new!(Time.new!(hour, 0, 0), "UTC")
-      |> DateTime.to_iso8601()
+  defp calculate_start_end_times(user_day, hour, duration_minutes, user_timezone) do
+    # Create date from user_day
+    date = DateTime.to_date(user_day)
+    time = Time.new!(hour, 0, 0)
 
-    end_time =
-      day
-      |> DateTime.to_date()
-      |> DateTime.new!(Time.new!(hour, 0, 0), "UTC")
-      |> DateTime.add(duration_minutes * 60, :second)
-      |> DateTime.to_iso8601()
+    # Create naive datetime first
+    naive_start_time = NaiveDateTime.new!(date, time)
 
-    {start_time, end_time}
+    # Convert to user's timezone with DST support
+    case DateTime.from_naive(naive_start_time, user_timezone) do
+      {:ok, user_start_time} ->
+        # Convert to UTC for storage and API calls
+        case DateTime.shift_zone(user_start_time, "UTC") do
+          {:ok, utc_start_time} ->
+            # Calculate end times
+            user_end_time = DateTime.add(user_start_time, duration_minutes * 60, :second)
+            utc_end_time = DateTime.add(utc_start_time, duration_minutes * 60, :second)
+
+            {
+              DateTime.to_iso8601(utc_start_time),     # UTC for API
+              DateTime.to_iso8601(utc_end_time),       # UTC for API
+              DateTime.to_iso8601(user_start_time),    # User timezone for display
+              DateTime.to_iso8601(user_end_time)       # User timezone for display
+            }
+
+          {:error, _} ->
+            # Fallback to simpler calculation if timezone shift fails
+            fallback_calculate_times(naive_start_time, duration_minutes, user_timezone)
+        end
+
+      {:error, _} ->
+        # Fallback to simpler calculation if timezone creation fails
+        fallback_calculate_times(naive_start_time, duration_minutes, user_timezone)
+    end
   end
 
-  defp slots_overlap?({slot_start, slot_end}, {busy_start, busy_end}) do
-    case {DateTime.from_iso8601(slot_start), DateTime.from_iso8601(slot_end),
+  # Fallback calculation method
+  defp fallback_calculate_times(naive_start_time, duration_minutes, _user_timezone) do
+    # Use UTC as fallback
+    utc_start_time = DateTime.from_naive!(naive_start_time, "Etc/UTC")
+    utc_end_time = DateTime.add(utc_start_time, duration_minutes * 60, :second)
+
+    {
+      DateTime.to_iso8601(utc_start_time),
+      DateTime.to_iso8601(utc_end_time),
+      DateTime.to_iso8601(utc_start_time),
+      DateTime.to_iso8601(utc_end_time)
+    }
+  end
+
+  defp slots_overlap?({slot_start_utc, slot_end_utc, _, _}, {busy_start, busy_end}) do
+    case {DateTime.from_iso8601(slot_start_utc), DateTime.from_iso8601(slot_end_utc),
           DateTime.from_iso8601(busy_start), DateTime.from_iso8601(busy_end)} do
       {{:ok, slot_start_dt, _}, {:ok, slot_end_dt, _}, {:ok, busy_start_dt, _},
        {:ok, busy_end_dt, _}} ->
@@ -292,6 +339,19 @@ defmodule FinancialAdvisorAi.Integrations.CalendarService do
       _ ->
         # If we can't parse dates, assume no overlap
         false
+    end
+  end
+
+  # Timezone conversion helper functions with DST support
+  defp convert_utc_to_timezone(utc_datetime, timezone) when timezone == "UTC" do
+    utc_datetime
+  end
+
+  defp convert_utc_to_timezone(utc_datetime, timezone) do
+    # Use proper timezone conversion with DST support
+    case DateTime.shift_zone(utc_datetime, timezone) do
+      {:ok, shifted_datetime} -> shifted_datetime
+      {:error, _} -> utc_datetime  # Fallback to UTC if timezone is invalid
     end
   end
 end

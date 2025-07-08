@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+
+cd -P -- "$(dirname -- "$0")"
+exec ./financial_advisor_ai eval FinancialAdvisorAi.Release.migrate

@@ -20,26 +20,52 @@ if System.get_env("PHX_SERVER") do
   config :financial_advisor_ai, FinancialAdvisorAiWeb.Endpoint, server: true
 end
 
-config :langchain, openai_key: System.fetch_env!("OPENAI_API_KEY")
+# Only configure OpenAI API key if it's available (not needed during migrations)
+if System.get_env("OPENAI_API_KEY") do
+  config :langchain, openai_key: System.get_env("OPENAI_API_KEY")
+end
 
-config :ueberauth, Ueberauth.Strategy.Google.OAuth,
-  client_id: System.get_env("GOOGLE_CLIENT_ID"),
-  client_secret: System.get_env("GOOGLE_CLIENT_SECRET")
+# Configure OAuth only if credentials are available
+if System.get_env("GOOGLE_CLIENT_ID") && System.get_env("GOOGLE_CLIENT_SECRET") do
+  config :ueberauth, Ueberauth.Strategy.Google.OAuth,
+    client_id: System.get_env("GOOGLE_CLIENT_ID"),
+    client_secret: System.get_env("GOOGLE_CLIENT_SECRET")
+end
 
-config :ueberauth, FinancialAdvisorAi.Auth.Strategy.Hubspot.OAuth,
-  client_id: System.get_env("HUBSPOT_CLIENT_ID"),
-  client_secret: System.get_env("HUBSPOT_CLIENT_SECRET")
+if System.get_env("HUBSPOT_CLIENT_ID") && System.get_env("HUBSPOT_CLIENT_SECRET") do
+  config :ueberauth, FinancialAdvisorAi.Auth.Strategy.Hubspot.OAuth,
+    client_id: System.get_env("HUBSPOT_CLIENT_ID"),
+    client_secret: System.get_env("HUBSPOT_CLIENT_SECRET")
+end
 
 if config_env() == :prod do
-  config :financial_advisor_ai, FinancialAdvisorAi.Repo,
-    database: System.get_env("DATABASE_NAME", "financial_advisor_ai"),
-    username: System.get_env("DATABASE_USERNAME", "postgres"),
-    password: System.get_env("DATABASE_PASSWORD", "postgres"),
-    hostname: System.get_env("DATABASE_HOST", "localhost"),
-    port: String.to_integer(System.get_env("DATABASE_PORT") || "5432"),
-    pool_size: String.to_integer(System.get_env("DATABASE_POOL_SIZE") || "10"),
-    stacktrace: true,
-    show_sensitive_data_on_connection_error: false
+  # Use DATABASE_URL if provided by Fly.io, otherwise use individual environment variables
+  database_url = System.get_env("DATABASE_URL")
+
+  IO.puts("DATABASE_URL exists: #{database_url != nil}")
+
+  database_config =
+    if database_url do
+      [
+        url: database_url,
+        pool_size: String.to_integer(System.get_env("DATABASE_POOL_SIZE") || "10"),
+        stacktrace: true,
+        show_sensitive_data_on_connection_error: false
+      ]
+    else
+      [
+        database: System.get_env("DATABASE_NAME", "financial_advisor_ai"),
+        username: System.get_env("DATABASE_USERNAME", "postgres"),
+        password: System.get_env("DATABASE_PASSWORD", "postgres"),
+        hostname: System.get_env("DATABASE_HOST", "localhost"),
+        port: String.to_integer(System.get_env("DATABASE_PORT") || "5432"),
+        pool_size: String.to_integer(System.get_env("DATABASE_POOL_SIZE") || "10"),
+        stacktrace: true,
+        show_sensitive_data_on_connection_error: false
+      ]
+    end
+
+  config :financial_advisor_ai, FinancialAdvisorAi.Repo, database_config
 
   # The secret key base is used to sign/encrypt cookies and other secrets.
   # A default value is used in config/dev.exs and config/test.exs but you

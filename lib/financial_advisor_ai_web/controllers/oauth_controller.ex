@@ -274,10 +274,12 @@ defmodule FinancialAdvisorAiWeb.OauthController do
 
   defp get_base_url do
     # In development, use localhost. In production, use actual domain
-    case Application.get_env(:financial_advisor_ai, :environment) do
-      :prod -> System.get_env("BASE_URL", "https://your-app.fly.dev")
-      _ -> "http://localhost:4000"
-    end
+    # case Application.get_env(:financial_advisor_ai, :environment) do
+    #   :prod -> System.get_env("BASE_URL", "https://your-app.fly.dev")
+    #   _ -> "http://localhost:4000"
+    # end
+    # hardcoded for now
+    "https://financial-advisor-ai-zbrz.onrender.com"
   end
 
   defp fetch_google_user_info(access_token) do

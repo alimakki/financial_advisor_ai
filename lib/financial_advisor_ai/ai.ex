@@ -130,6 +130,10 @@ defmodule FinancialAdvisorAi.AI do
     end
   end
 
+  def delete_integration(%Integration{} = integration) do
+    Repo.delete(integration)
+  end
+
   @doc """
   Gets an integration with automatic token refresh if needed.
 

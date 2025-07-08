@@ -17,77 +17,39 @@
   themes: false;
 }
 
-/* daisyUI theme plugin. You can update this file by fetching the latest version with:
-  curl -sLO https://github.com/saadeghi/daisyui/releases/latest/download/daisyui-theme.js
-  We ship with two themes, a light one inspired on Phoenix colors and a dark one inspired
-  on Elixir colors. Build your own at: https://daisyui.com/theme-generator/ */
+/* Financial Theme - Metallic & Professional */
 @plugin "../vendor/daisyui-theme" {
-  name: "dark";
-  default: false;
+  name: "financial";
+  default: true;
   prefersdark: true;
   color-scheme: "dark";
-  --color-base-100: oklch(30.33% 0.016 252.42);
-  --color-base-200: oklch(25.26% 0.014 253.1);
-  --color-base-300: oklch(20.15% 0.012 254.09);
-  --color-base-content: oklch(97.807% 0.029 256.847);
-  --color-primary: oklch(58% 0.233 277.117);
-  --color-primary-content: oklch(96% 0.018 272.314);
-  --color-secondary: oklch(58% 0.233 277.117);
-  --color-secondary-content: oklch(96% 0.018 272.314);
-  --color-accent: oklch(60% 0.25 292.717);
-  --color-accent-content: oklch(96% 0.016 293.756);
-  --color-neutral: oklch(37% 0.044 257.287);
-  --color-neutral-content: oklch(98% 0.003 247.858);
-  --color-info: oklch(58% 0.158 241.966);
-  --color-info-content: oklch(97% 0.013 236.62);
-  --color-success: oklch(60% 0.118 184.704);
-  --color-success-content: oklch(98% 0.014 180.72);
-  --color-warning: oklch(66% 0.179 58.318);
-  --color-warning-content: oklch(98% 0.022 95.277);
-  --color-error: oklch(58% 0.253 17.585);
-  --color-error-content: oklch(96% 0.015 12.422);
-  --radius-selector: 0.25rem;
-  --radius-field: 0.25rem;
-  --radius-box: 0.5rem;
-  --size-selector: 0.21875rem;
-  --size-field: 0.21875rem;
-  --border: 1.5px;
-  --depth: 1;
-  --noise: 0;
-}
-
-@plugin "../vendor/daisyui-theme" {
-  name: "light";
-  default: true;
-  prefersdark: false;
-  color-scheme: "light";
-  --color-base-100: oklch(98% 0 0);
-  --color-base-200: oklch(96% 0.001 286.375);
-  --color-base-300: oklch(92% 0.004 286.32);
-  --color-base-content: oklch(21% 0.006 285.885);
-  --color-primary: oklch(70% 0.213 47.604);
-  --color-primary-content: oklch(98% 0.016 73.684);
-  --color-secondary: oklch(55% 0.027 264.364);
-  --color-secondary-content: oklch(98% 0.002 247.839);
-  --color-accent: oklch(0% 0 0);
-  --color-accent-content: oklch(100% 0 0);
-  --color-neutral: oklch(44% 0.017 285.786);
-  --color-neutral-content: oklch(98% 0 0);
-  --color-info: oklch(62% 0.214 259.815);
-  --color-info-content: oklch(97% 0.014 254.604);
-  --color-success: oklch(70% 0.14 182.503);
-  --color-success-content: oklch(98% 0.014 180.72);
-  --color-warning: oklch(66% 0.179 58.318);
-  --color-warning-content: oklch(98% 0.022 95.277);
-  --color-error: oklch(58% 0.253 17.585);
-  --color-error-content: oklch(96% 0.015 12.422);
-  --radius-selector: 0.25rem;
-  --radius-field: 0.25rem;
-  --radius-box: 0.5rem;
-  --size-selector: 0.21875rem;
-  --size-field: 0.21875rem;
-  --border: 1.5px;
-  --depth: 1;
+  --color-base-100: oklch(12% 0.005 240);
+  --color-base-200: oklch(16% 0.005 240);
+  --color-base-300: oklch(20% 0.005 240);
+  --color-base-content: oklch(90% 0.005 240);
+  --color-primary: oklch(60% 0.05 240);
+  --color-primary-content: oklch(95% 0.005 240);
+  --color-secondary: oklch(55% 0.05 240);
+  --color-secondary-content: oklch(95% 0.005 240);
+  --color-accent: oklch(70% 0.05 240);
+  --color-accent-content: oklch(15% 0.005 240);
+  --color-neutral: oklch(25% 0.005 240);
+  --color-neutral-content: oklch(85% 0.005 240);
+  --color-info: oklch(65% 0.05 240);
+  --color-info-content: oklch(95% 0.005 240);
+  --color-success: oklch(60% 0.08 150);
+  --color-success-content: oklch(95% 0.005 150);
+  --color-warning: oklch(70% 0.1 80);
+  --color-warning-content: oklch(15% 0.005 80);
+  --color-error: oklch(60% 0.15 15);
+  --color-error-content: oklch(95% 0.005 15);
+  --radius-selector: 0.5rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.75rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 2;
   --noise: 0;
 }
 
@@ -101,11 +63,12 @@
 
 /* This file is for your main application CSS */
 
-/* --- Custom Layout for Sidebar and Chat Area --- */
+/* --- Financial Theme Metallic Layout --- */
 .app-container {
   display: flex;
   height: 100vh;
   overflow: hidden;
+  background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);
 }
 
 .sidebar {
@@ -113,18 +76,19 @@
   min-width: 220px;
   max-width: 340px;
   height: 100vh;
-  background: #f8fafc;
-  border-right: 1px solid #e5e7eb;
+  background: linear-gradient(180deg, #2a2a2a 0%, #1a1a1a 100%);
+  border-right: 1px solid #3a3a3a;
   overflow-y: auto;
   position: relative;
   z-index: 1;
+  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.4);
 }
 
 .chat-area {
   flex: 1;
   height: 100vh;
   overflow-y: auto;
-  background: #fff;
+  background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);
   display: flex;
   flex-direction: column;
 }
@@ -132,6 +96,201 @@
 .chat-messages {
   flex: 1;
   overflow-y: auto;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
 }
 
-/* --- End Custom Layout --- */
+/* Add negative space on larger screens */
+@media (min-width: 1024px) {
+  .chat-messages {
+    max-width: 900px;
+    padding: 3rem 2rem;
+  }
+}
+
+@media (min-width: 1280px) {
+  .chat-messages {
+    max-width: 1000px;
+    padding: 4rem 3rem;
+  }
+}
+
+/* Input area styling to match centered layout */
+.chat-input-area {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+@media (min-width: 1024px) {
+  .chat-input-area {
+    max-width: 900px;
+    padding: 1.5rem 2rem;
+  }
+}
+
+@media (min-width: 1280px) {
+  .chat-input-area {
+    max-width: 1000px;
+    padding: 1.5rem 3rem;
+  }
+}
+
+/* Financial Theme Metallic Components */
+.financial-card {
+  background: linear-gradient(135deg, #3a3a3a 0%, #2a2a2a 100%);
+  border: 1px solid #4a4a4a;
+  border-radius: 0.75rem;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s ease;
+}
+
+.financial-card:hover {
+  background: linear-gradient(135deg, #404040 0%, #303030 100%);
+  border-color: #555555;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.financial-gradient {
+  background: linear-gradient(135deg, #6a6a6a 0%, #8a8a8a 50%, #9a9a9a 100%);
+}
+
+.financial-gradient:hover {
+  background: linear-gradient(135deg, #5a5a5a 0%, #7a7a7a 50%, #8a8a8a 100%);
+}
+
+.financial-text-gradient {
+  background: linear-gradient(135deg, #b0b0b0 0%, #d0d0d0 50%, #e0e0e0 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.financial-input {
+  background: linear-gradient(135deg, #3a3a3a 0%, #2a2a2a 100%);
+  border: 1px solid #4a4a4a;
+  color: #e5e7eb;
+  transition: all 0.3s ease;
+}
+
+.financial-input:focus {
+  background: linear-gradient(135deg, #404040 0%, #303030 100%);
+  border-color: #8a8a8a;
+  box-shadow: 0 0 0 3px rgba(138, 138, 138, 0.2);
+}
+
+.financial-input::placeholder {
+  color: #9ca3af;
+}
+
+.financial-sidebar-item {
+  background: linear-gradient(135deg, #3a3a3a 0%, #2a2a2a 100%);
+  border: 1px solid #4a4a4a;
+  border-radius: 0.75rem;
+  transition: all 0.3s ease;
+}
+
+.financial-sidebar-item:hover {
+  background: linear-gradient(135deg, #404040 0%, #303030 100%);
+  border-color: #555555;
+  transform: translateY(-1px);
+}
+
+.financial-sidebar-item.active {
+  background: linear-gradient(135deg, #6a6a6a 0%, #8a8a8a 100%);
+  border-color: #9a9a9a;
+  box-shadow: 0 4px 24px rgba(138, 138, 138, 0.3);
+}
+
+.financial-message-bubble {
+  background: linear-gradient(135deg, #3a3a3a 0%, #2a2a2a 100%);
+  border: 1px solid #4a4a4a;
+  border-radius: 1rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.financial-message-bubble.user {
+  background: linear-gradient(135deg, #6a6a6a 0%, #8a8a8a 100%);
+  border-color: #9a9a9a;
+}
+
+.financial-typing-indicator {
+  background: linear-gradient(135deg, #3a3a3a 0%, #2a2a2a 100%);
+  border: 1px solid #4a4a4a;
+  border-radius: 1rem;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(138, 138, 138, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(138, 138, 138, 0); }
+}
+
+.financial-status-badge {
+  background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+  color: #ecfdf5;
+  border-radius: 9999px;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+}
+
+.financial-status-badge.partial {
+  background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%);
+  color: #fef3c7;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+}
+
+.financial-metallic-accent {
+  background: linear-gradient(135deg, #8a8a8a 0%, #a0a0a0 100%);
+  color: #1a1a1a;
+}
+
+.financial-metallic-accent:hover {
+  background: linear-gradient(135deg, #9a9a9a 0%, #b0b0b0 100%);
+}
+
+/* --- End Financial Theme --- */
+
+/* Tooltip styles */
+.tooltip {
+  position: relative;
+  display: inline-block;
+}
+
+.tooltip .tooltiptext {
+  visibility: hidden;
+  width: 80px;
+  background-color: #2a2a2a;
+  color: #e5e7eb;
+  text-align: center;
+  border-radius: 6px;
+  padding: 5px 8px;
+  position: absolute;
+  z-index: 1;
+  bottom: 125%;
+  left: 50%;
+  margin-left: -40px;
+  opacity: 0;
+  transition: opacity 0.3s;
+  font-size: 0.75rem;
+  border: 1px solid #4a4a4a;
+}
+
+.tooltip .tooltiptext::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-left: -5px;
+  border-width: 5px;
+  border-style: solid;
+  border-color: #2a2a2a transparent transparent transparent;
+}
+
+.tooltip:hover .tooltiptext {
+  visibility: visible;
+  opacity: 1;
+}

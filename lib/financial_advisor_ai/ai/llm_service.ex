@@ -538,7 +538,7 @@ defmodule FinancialAdvisorAi.AI.LlmService do
         {:ok, content || "I apologize, but I couldn't generate a response at this time."}
 
       tool_calls ->
-        # IO.inspect(tool_calls, label: "tool_calls")
+        IO.inspect(tool_calls, label: "tool_calls")
         # Process tool calls and send results back to LLM
         execute_tool_calls_and_get_response(
           tool_calls,
@@ -558,7 +558,7 @@ defmodule FinancialAdvisorAi.AI.LlmService do
          initial_messages
        ) do
     # Execute all tool calls
-    tool_results = execute_tool_calls(tool_calls, user_id)
+    tool_results = execute_tool_calls(tool_calls, user_id) |> IO.inspect(label: "tool_results")
 
     # Always send results to LLM, even if some tools failed
     # The LLM can handle the error messages and provide a helpful response
@@ -753,21 +753,18 @@ defmodule FinancialAdvisorAi.AI.LlmService do
   end
 
   defp execute_tool("send_email", params, user_id) do
-    # Create a task for sending the email
-    task_params = %{
-      user_id: user_id,
-      title: "Send email: #{Map.get(params, "subject")}",
-      description: "Send email to #{Map.get(params, "to")}",
-      task_type: "email",
-      parameters: params
-    }
-
-    case FinancialAdvisorAi.AI.create_task(task_params) do
-      {:ok, task} ->
-        {:ok, %{tool: "send_email", task_id: task.id, status: "task_created"}}
+    FinancialAdvisorAi.Integrations.GmailService.send_email(
+      user_id,
+      params["to"],
+      params["subject"],
+      params["body"]
+    )
+    |> case do
+      {:ok, _} ->
+        {:ok, %{tool: "send_email", status: "email_sent"}}
 
       {:error, reason} ->
-        {:error, "Failed to create email task: #{inspect(reason)}"}
+        {:error, "Failed to send email: #{inspect(reason)}"}
     end
   end
 
@@ -814,7 +811,8 @@ defmodule FinancialAdvisorAi.AI.LlmService do
            user_id,
            duration_minutes,
            preferred_times
-         ) do
+         )
+         |> IO.inspect(label: "find_free_time") do
       {:ok, availability} ->
         # Get user timezone for display purposes
         user = FinancialAdvisorAi.Accounts.get_user!(user_id)

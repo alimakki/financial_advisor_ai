@@ -165,8 +165,6 @@ defmodule FinancialAdvisorAi.Integrations.HubspotService do
   timestamp in the integration metadata.
   """
   def poll_and_import_contacts_and_notes(user_id) do
-    IO.inspect(user_id, label: "polling hubspot for user_id #{user_id}")
-
     with {:ok, integration} <- get_hubspot_integration(user_id),
          last_seen_timestamp <-
            Map.get(integration.metadata || %{}, "last_seen_hubspot_timestamp"),
@@ -507,7 +505,7 @@ defmodule FinancialAdvisorAi.Integrations.HubspotService do
     alias FinancialAdvisorAi.AI.LlmService
 
     # Fetch notes for this contact
-    case get_contact_notes(user_id, contact_id) |> IO.inspect(label: "get_contact_notes") do
+    case get_contact_notes(user_id, contact_id) do
       {:ok, notes_data} ->
         # Process each note - we'll check for duplicates by hubspot_note_id instead of timestamp filtering
         processed_count =

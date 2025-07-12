@@ -26,7 +26,8 @@ defmodule FinancialAdvisorAi.Application do
       FinancialAdvisorAiWeb.Endpoint,
       FinancialAdvisorAi.AI.PollingWorker,
       FinancialAdvisorAi.AI.TokenRefreshScheduler,
-      FinancialAdvisorAi.AI.HubspotNotesScheduler
+      FinancialAdvisorAi.AI.HubspotNotesScheduler,
+      {Task.Supervisor, name: FinancialAdvisorAi.TaskSupervisor}
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html

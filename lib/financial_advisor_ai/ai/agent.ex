@@ -14,7 +14,7 @@ defmodule FinancialAdvisorAi.AI.Agent do
   require Logger
 
   alias FinancialAdvisorAi.AI
-  alias FinancialAdvisorAi.AI.{LlmService, RagService, AgentTools}
+  alias FinancialAdvisorAi.AI.{LlmService, RagService, AgentTools, RuleDetector}
 
   # Agent state structure
   defstruct [
@@ -135,30 +135,51 @@ defmodule FinancialAdvisorAi.AI.Agent do
     # Update last activity
     state = %{state | last_activity: DateTime.utc_now()}
 
-    # Check if this is an ongoing instruction
-    if contains_instruction_keywords?(message_content) do
-      # Extract and store the instruction
-      instruction = extract_instruction(message_content)
+    # Check if this is an automation rule using LLM
+    case RuleDetector.analyze_message(message_content) do
+      {:ok, rule_data} when not is_nil(rule_data) ->
+        # This is a rule - create it
+        case AI.create_rule(Map.put(rule_data, :user_id, state.user_id)) do
+          {:ok, _rule} ->
+            response = build_rule_confirmation_response(rule_data)
+            {:reply, {:ok, response}, state}
 
-      {:ok, _} =
-        AI.create_instruction(%{
-          user_id: state.user_id,
-          instruction: instruction,
-          trigger_events: determine_trigger_events(instruction)
-        })
+          {:error, reason} ->
+            Logger.warning("Failed to create rule: #{inspect(reason)}")
 
-      # Update state with new instruction
-      instructions = AI.list_active_instructions(state.user_id)
-      state = %{state | ongoing_instructions: instructions}
+            response =
+              "I understand you want to create a rule, but I had trouble saving it. Please try again."
 
-      response = "I've added that as an ongoing instruction. I'll remember to: #{instruction}"
-      {:reply, {:ok, response}, state}
-    else
-      # Process as regular message with RAG and tool calling
-      case process_user_message(message_content, conversation_id, state) do
-        {:ok, response, new_state} ->
-          {:reply, {:ok, response}, new_state}
-      end
+            {:reply, {:ok, response}, state}
+        end
+
+      {:ok, nil} ->
+        # Not a rule - process as regular message
+        case process_user_message(message_content, conversation_id, state) do
+          {:ok, response, new_state} ->
+            {:reply, {:ok, response}, new_state}
+        end
+
+      {:error, :user_retry_needed} ->
+        Logger.warning("Rule detection timed out after retries")
+
+        response =
+          "I'm sorry, but I'm having trouble processing your message right now due to a timeout. Please try again in a moment."
+
+        {:reply, {:ok, response}, state}
+
+      {:error, :api_error} ->
+        Logger.warning("Rule detection API error")
+        response = "I'm experiencing some technical difficulties. Please try again in a moment."
+        {:reply, {:ok, response}, state}
+
+      {:error, reason} ->
+        Logger.warning("Rule detection failed: #{inspect(reason)}")
+        # Fall back to regular message processing for other errors
+        case process_user_message(message_content, conversation_id, state) do
+          {:ok, response, new_state} ->
+            {:reply, {:ok, response}, new_state}
+        end
     end
   end
 
@@ -167,7 +188,7 @@ defmodule FinancialAdvisorAi.AI.Agent do
     case AI.create_instruction(%{
            user_id: state.user_id,
            instruction: instruction,
-           trigger_events: determine_trigger_events(instruction)
+           trigger_events: ["gmail", "calendar", "hubspot"]
          }) do
       {:ok, _} ->
         instructions = AI.list_active_instructions(state.user_id)
@@ -410,40 +431,62 @@ defmodule FinancialAdvisorAi.AI.Agent do
     )
   end
 
-  defp contains_instruction_keywords?(message) do
-    keywords = ["when", "always", "remember to", "ongoing", "instruction", "rule"]
-    message_lower = String.downcase(message)
+  defp build_rule_confirmation_response(rule_data) do
+    trigger_description = get_trigger_description(rule_data.trigger)
+    condition_description = get_condition_description(rule_data.condition)
+    actions_description = get_actions_description(rule_data.actions)
 
-    Enum.any?(keywords, &String.contains?(message_lower, &1))
+    base_response = "I've created a new automation rule for you!"
+
+    details = [
+      "📋 **Rule Details:**",
+      "• **Trigger:** #{trigger_description}",
+      "• **Condition:** #{condition_description}",
+      "• **Actions:** #{actions_description}"
+    ]
+
+    [base_response | details] |> Enum.join("\n")
   end
 
-  defp extract_instruction(message) do
-    # Simple extraction - could be enhanced with NLP
-    String.trim(message)
+  defp get_trigger_description(trigger) do
+    case trigger do
+      "email_received" -> "When you receive an email"
+      "calendar_event" -> "When a calendar event occurs"
+      "contact_created" -> "When a new contact is created"
+      "general" -> "General automation rule"
+      _ -> "#{trigger}"
+    end
   end
 
-  defp determine_trigger_events(instruction) do
-    instruction_lower = String.downcase(instruction)
-
-    events = []
-
-    events =
-      if String.contains?(instruction_lower, ["email", "message"]),
-        do: ["gmail" | events],
-        else: events
-
-    events =
-      if String.contains?(instruction_lower, ["calendar", "meeting", "appointment"]),
-        do: ["calendar" | events],
-        else: events
-
-    events =
-      if String.contains?(instruction_lower, ["contact", "hubspot", "crm"]),
-        do: ["hubspot" | events],
-        else: events
-
-    if events == [], do: ["gmail", "calendar", "hubspot"], else: events
+  defp get_condition_description(%{"description" => description}) when is_binary(description) do
+    description
   end
+
+  defp get_condition_description(_), do: "No specific conditions"
+
+  defp get_actions_description(actions) when is_list(actions) do
+    actions
+    |> Enum.map_join(", ", &get_action_description/1)
+  end
+
+  defp get_actions_description(_), do: "No actions defined"
+
+  defp get_action_description(%{"description" => description}) when is_binary(description) do
+    description
+  end
+
+  defp get_action_description(%{"type" => type}) do
+    case type do
+      "create_contact" -> "Create a new contact"
+      "send_email" -> "Send an email"
+      "schedule_meeting" -> "Schedule a meeting"
+      "log_note" -> "Log a note"
+      "custom" -> "Custom action"
+      _ -> "#{type}"
+    end
+  end
+
+  defp get_action_description(_), do: "Unknown action"
 
   defp find_relevant_instructions(event, instructions) do
     Enum.filter(instructions, fn instruction ->

@@ -103,6 +103,12 @@ defmodule FinancialAdvisorAi.AI.LlmService do
   defp build_system_prompt_with_tools(timezone) do
     current_date = Date.utc_today() |> Date.to_string()
 
+    available_tools =
+      tool_descriptions()
+      |> Enum.map_join("\n", fn %{name: name, description: description} ->
+        "- #{name}: #{description}"
+      end)
+
     """
     You are an AI Financial Advisor Assistant with tool calling capabilities. You can:
 
@@ -113,12 +119,7 @@ defmodule FinancialAdvisorAi.AI.LlmService do
     5. Create and manage tasks
 
     Available tools:
-    - search_emails: Search through emails for specific content or people
-    - schedule_meeting: Schedule a calendar appointment with clients
-    - create_contact: Create a new contact in the CRM
-    - send_email: Send an email to a client or contact
-    - create_task: Create a persistent task for follow-up
-    - find_calendar_availability: Find available time slots in Google Calendar for scheduling meetings
+    #{available_tools}
 
     Current date: #{current_date}
     User timezone: #{timezone}
@@ -245,7 +246,7 @@ defmodule FinancialAdvisorAi.AI.LlmService do
       Application.get_env(:financial_advisor_ai, :openai_api_url)
   end
 
-  defp make_openai_request(messages, model) do
+  def make_openai_request(messages, model, additional_body_params \\ %{}) do
     api_key = get_api_key()
 
     if is_nil(api_key) do
@@ -256,12 +257,14 @@ defmodule FinancialAdvisorAi.AI.LlmService do
         {"Content-Type", "application/json"}
       ]
 
-      body = %{
-        model: model,
-        messages: messages,
-        max_tokens: 1000,
-        temperature: 0.7
-      }
+      body =
+        %{
+          model: model,
+          messages: messages,
+          max_tokens: 1000,
+          temperature: 0.7
+        }
+        |> Map.merge(additional_body_params)
 
       case Req.post("#{openai_api_url()}/chat/completions", headers: headers, json: body) do
         {:ok, %{status: 200, body: response}} -> {:ok, response}
@@ -295,7 +298,7 @@ defmodule FinancialAdvisorAi.AI.LlmService do
     end
   end
 
-  defp make_openai_request_with_tools(messages, model, tools) do
+  def make_openai_request_with_tools(messages, model, tools) do
     api_key = get_api_key()
 
     if is_nil(api_key) do
@@ -323,7 +326,13 @@ defmodule FinancialAdvisorAi.AI.LlmService do
     end
   end
 
-  defp build_tool_definitions do
+  def tool_descriptions() do
+    for %{function: %{name: name, description: description}} <- build_tool_definitions() do
+      %{name: name, description: description}
+    end
+  end
+
+  def build_tool_definitions() do
     [
       %{
         type: "function",
@@ -422,35 +431,6 @@ defmodule FinancialAdvisorAi.AI.LlmService do
             # it is recommended to always include email, because email address is the primary unique identifier to avoid duplicate contacts in HubSpot.
             # https://developers.hubspot.com/docs/guides/api/crm/objects/contacts
             required: ["email"]
-          }
-        }
-      },
-      %{
-        type: "function",
-        function: %{
-          name: "create_task",
-          description: "Create a persistent task for follow-up actions",
-          parameters: %{
-            type: "object",
-            properties: %{
-              title: %{
-                type: "string",
-                description: "The task title"
-              },
-              description: %{
-                type: "string",
-                description: "Detailed task description"
-              },
-              task_type: %{
-                type: "string",
-                description: "Type of task (email, calendar, hubspot, follow_up)"
-              },
-              scheduled_for: %{
-                type: "string",
-                description: "When to execute the task (ISO 8601 format)"
-              }
-            },
-            required: ["title", "task_type"]
           }
         }
       },
@@ -660,7 +640,9 @@ defmodule FinancialAdvisorAi.AI.LlmService do
     end)
   end
 
-  defp execute_tool("search_emails", params, user_id) do
+  def execute_tool(tool_name, params, user_id)
+
+  def execute_tool("search_emails", params, user_id) do
     query = Map.get(params, "query")
     sender = Map.get(params, "sender")
 
@@ -677,7 +659,7 @@ defmodule FinancialAdvisorAi.AI.LlmService do
     {:ok, %{tool: "search_emails", results: filtered_emails, query: query}}
   end
 
-  defp execute_tool("search_contacts", params, user_id) do
+  def execute_tool("search_contacts", params, user_id) do
     query = Map.get(params, "query")
 
     HubspotService.search_contacts(user_id, query)
@@ -690,7 +672,7 @@ defmodule FinancialAdvisorAi.AI.LlmService do
     end
   end
 
-  defp execute_tool("create_note", params, user_id) do
+  def execute_tool("create_note", params, user_id) do
     contact_id = Map.get(params, "contact_id")
     note_content = Map.get(params, "note_content")
 
@@ -704,7 +686,7 @@ defmodule FinancialAdvisorAi.AI.LlmService do
     end
   end
 
-  defp execute_tool("schedule_meeting", params, user_id) do
+  def execute_tool("schedule_meeting", params, user_id) do
     client_email = Map.get(params, "client_email")
     subject = Map.get(params, "subject")
     duration_minutes = Map.get(params, "duration_minutes", 60)
@@ -752,7 +734,7 @@ defmodule FinancialAdvisorAi.AI.LlmService do
     end
   end
 
-  defp execute_tool("send_email", params, user_id) do
+  def execute_tool("send_email", params, user_id) do
     FinancialAdvisorAi.Integrations.GmailService.send_email(
       user_id,
       params["to"],
@@ -768,7 +750,7 @@ defmodule FinancialAdvisorAi.AI.LlmService do
     end
   end
 
-  defp execute_tool("create_contact", params, user_id) do
+  def execute_tool("create_contact", params, user_id) do
     case HubspotService.create_contact(user_id, params) do
       {:ok, contact} ->
         {:ok, %{tool: "create_contact", contact_id: contact.id, status: "contact_created"}}
@@ -790,19 +772,19 @@ defmodule FinancialAdvisorAi.AI.LlmService do
     end
   end
 
-  defp execute_tool("create_task", params, user_id) do
-    task_params = Map.put(params, "user_id", user_id)
+  # defp execute_tool("create_task", params, user_id) do
+  #   task_params = Map.put(params, "user_id", user_id)
 
-    case FinancialAdvisorAi.AI.create_task(task_params) do
-      {:ok, task} ->
-        {:ok, %{tool: "create_task", task_id: task.id, status: "task_created"}}
+  #   case FinancialAdvisorAi.AI.create_task(task_params) do
+  #     {:ok, task} ->
+  #       {:ok, %{tool: "create_task", task_id: task.id, status: "task_created"}}
 
-      {:error, reason} ->
-        {:error, "Failed to create task: #{inspect(reason)}"}
-    end
-  end
+  #     {:error, reason} ->
+  #       {:error, "Failed to create task: #{inspect(reason)}"}
+  #   end
+  # end
 
-  defp execute_tool("find_calendar_availability", params, user_id) do
+  def execute_tool("find_calendar_availability", params, user_id) do
     # Ensure preferred_times is always a list, defaulting to empty list if nil
     preferred_times = params["preferred_times"] || []
     duration_minutes = params["duration_minutes"] || 60
@@ -842,7 +824,7 @@ defmodule FinancialAdvisorAi.AI.LlmService do
     end
   end
 
-  defp execute_tool(unknown_tool, _params, _user_id) do
+  def execute_tool(unknown_tool, _params, _user_id) do
     {:error, "Unknown tool: #{unknown_tool}"}
   end
 

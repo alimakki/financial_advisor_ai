@@ -123,7 +123,7 @@ defmodule FinancialAdvisorAi.AI.RagService do
           rescue
             e ->
               require Logger
-              Logger.warn("Vector search failed, falling back to text search: #{inspect(e)}")
+              Logger.warning("Vector search failed, falling back to text search: #{inspect(e)}")
               search_emails_by_content(user_id, query)
           end
         else

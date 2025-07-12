@@ -4,6 +4,7 @@ defmodule FinancialAdvisorAi.AI do
   """
 
   import Ecto.Query, warn: false
+  alias FinancialAdvisorAi.AI.LlmService
   alias FinancialAdvisorAi.Repo
 
   alias FinancialAdvisorAi.AI.{
@@ -14,7 +15,8 @@ defmodule FinancialAdvisorAi.AI do
     Integration,
     EmailEmbedding,
     ContactEmbedding,
-    ContactNote
+    ContactNote,
+    Rule
   }
 
   alias FinancialAdvisorAi.Integrations.TokenRefreshService
@@ -104,6 +106,41 @@ defmodule FinancialAdvisorAi.AI do
     %OngoingInstruction{}
     |> OngoingInstruction.changeset(attrs)
     |> Repo.insert()
+  end
+
+  # Rules
+
+  def list_user_rules(user_id, trigger \\ nil) do
+    Rule
+    |> where([r], r.user_id == ^user_id)
+    |> maybe_filter_by_trigger(trigger)
+    |> order_by([r], asc: r.inserted_at)
+    |> Repo.all()
+  end
+
+  defp maybe_filter_by_trigger(query, trigger) do
+    case trigger do
+      nil -> query
+      _ -> where(query, [r], r.trigger == ^trigger)
+    end
+  end
+
+  def get_rule!(id), do: Repo.get!(Rule, id)
+
+  def create_rule(attrs \\ %{}) do
+    %Rule{}
+    |> Rule.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  def update_rule(%Rule{} = rule, attrs) do
+    rule
+    |> Rule.changeset(attrs)
+    |> Repo.update()
+  end
+
+  def delete_rule(%Rule{} = rule) do
+    Repo.delete(rule)
   end
 
   # Integrations
@@ -341,5 +378,100 @@ defmodule FinancialAdvisorAi.AI do
   def process_contact_notes(user_id) do
     alias FinancialAdvisorAi.Integrations.HubspotService
     HubspotService.process_contact_notes(user_id)
+  end
+
+  def run_rule(rule, context) do
+    require Logger
+
+    # Extract actions from the rule
+    actions = rule.actions || []
+
+    if Enum.empty?(actions) do
+      Logger.warning("Rule #{rule.id} has no actions to execute")
+      {:ok, "No actions to execute"}
+    else
+      # Execute each action using the LLM tool system
+      execute_rule_actions(actions, rule.user_id, context)
+    end
+  end
+
+  defp tool_executor_prompt(context) do
+    """
+    You are an expert at executing automation rules.
+
+    You will be given a rule and a context.
+
+    You will need to execute the rule actions using the LLM tool system.
+
+    You will need to use the following tools:
+    #{FinancialAdvisorAi.AI.LlmService.tool_descriptions() |> Enum.map_join("\n", fn %{name: name, description: description} -> "- #{name}: #{description}" end)}
+
+    The initial context is:
+    #{Jason.encode!(context)}
+    """
+  end
+
+  defp execute_rule_actions(actions, user_id, context) do
+    # Convert rule actions to tool calls format
+
+    system_prompt = tool_executor_prompt(context)
+    tools = FinancialAdvisorAi.AI.LlmService.build_tool_definitions()
+
+    # We'll use the LLM to execute each action as a tool call, feeding the result of each as context to the next.
+    # There will be one system prompt, and for each action, we build a user message describing the action and any context from previous results.
+
+    # We'll accumulate results to feed as context to subsequent actions
+    Enum.reduce(actions, [], fn action, prev_results ->
+      # Build user message for this action, including previous results as context if any
+      user_message =
+        if prev_results == [] do
+          %{
+            role: "user",
+            content: "Execute this action as a tool call: #{Jason.encode!(action)}"
+          }
+        else
+          %{
+            role: "user",
+            content:
+              "Given the previous tool call results: #{Jason.encode!(prev_results)}, execute this action as a tool call: #{Jason.encode!(action)}"
+          }
+        end
+
+      messages = [
+        %{role: "system", content: system_prompt},
+        user_message
+      ]
+      |> IO.inspect(label: "rule actions")
+
+      # Call the LLM with tool calling enabled for this action
+      case FinancialAdvisorAi.AI.LlmService.make_openai_request_with_tools(
+             messages,
+             "gpt-4o-mini",
+             tools
+           ) do
+        {:ok, %{"choices" => [%{"message" => %{"tool_calls" => [tool_call | _]}}]}} ->
+          # Execute the tool call and append the result to prev_results
+          function_name = get_in(tool_call, ["function", "name"]) |> IO.inspect(label: "function_name")
+          arguments = get_in(tool_call, ["function", "arguments"]) |> IO.inspect(label: "arguments")
+
+          result =
+            case Jason.decode(arguments) do
+              {:ok, params} ->
+                LlmService.execute_tool(function_name, params, user_id) |> IO.inspect(label: "tool_result")
+
+              {:error, _} ->
+                {:error, "Invalid tool arguments"}
+            end
+
+          prev_results ++ [result]
+
+        {:ok, %{"choices" => [%{"message" => %{"content" => content}}]}} ->
+          # No tool call, just append the content as a result
+          prev_results ++ [content]
+
+        {:error, reason} ->
+          prev_results ++ [{:error, reason}]
+      end
+    end)
   end
 end

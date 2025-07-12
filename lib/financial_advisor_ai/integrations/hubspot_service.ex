@@ -38,9 +38,28 @@ defmodule FinancialAdvisorAi.Integrations.HubspotService do
              %{properties: contact_data},
              :post
            ) do
+      Task.Supervisor.start_child(FinancialAdvisorAi.TaskSupervisor, fn ->
+        maybe_run_rules(user_id, response) |> IO.inspect(label: "maybe_run_rules")
+      end)
+
       {:ok, parse_contact(response)}
     else
       error -> error
+    end
+  end
+
+  defp maybe_run_rules(user_id, payload) do
+    AI.list_user_rules(user_id, "contact_created")
+    |> case do
+      [] ->
+        :ok
+
+      rules ->
+        # example rule: {"{\"type\": \"send_email\", \"parameters\": {\"email_body\": \"Thank you for being a customer\"}, \"description\": \"Send a thank you email to the new contact\"}"}
+
+        Enum.each(rules, fn rule ->
+          AI.run_rule(rule, payload)
+        end)
     end
   end
 
@@ -280,10 +299,6 @@ defmodule FinancialAdvisorAi.Integrations.HubspotService do
       {"Authorization", "Bearer #{integration.access_token}"},
       {"Content-Type", "application/json"}
     ]
-
-    # IO.inspect(path, label: "path")
-    # IO.inspect(params, label: "params")
-    # IO.inspect(method, label: "method")
 
     case method do
       :get ->
